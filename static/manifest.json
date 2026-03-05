@@ -1,0 +1,21 @@
+{
+  "name": "BluePrint Engineering OS",
+  "short_name": "BluePrint",
+  "description": "نظام تشغيل هندسي ذكي يعمل بالذكاء الاصطناعي",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b2b4f",
+  "theme_color": "#1b4f8b",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

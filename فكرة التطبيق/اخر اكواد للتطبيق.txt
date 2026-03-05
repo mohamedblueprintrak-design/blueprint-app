@@ -1,0 +1,2789 @@
+"""
+BluePrint Engineering Consultancy - AI-Powered Engineering OS
+واجهة المستخدم الرئيسية (Streamlit) - تصميم عصري ومتطور
+"""
+
+import streamlit as st
+import requests
+import base64
+import json
+import pandas as pd
+import plotly.express as px
+from datetime import datetime
+import time
+import os
+
+# إعدادات الصفحة
+st.set_page_config(
+    page_title="BluePrint Engineering",
+    page_icon="🪄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ثوابت
+BACKEND = "http://127.0.0.1:8000"
+
+# تهيئة session state
+if "msgs" not in st.session_state:
+    st.session_state.msgs = []
+if "selected_project" not in st.session_state:
+    st.session_state.selected_project = None
+if "language" not in st.session_state:
+    st.session_state.language = "ar"  # ar / en
+
+# دوال مساعدة
+def switch_lang():
+    st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
+    st.rerun()
+
+def _(text_ar, text_en):
+    """ترجمة بسيطة"""
+    return text_ar if st.session_state.language == "ar" else text_en
+
+# CSS مخصص لتحسين المظهر
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Cairo', sans-serif;
+    }
+    
+    /* خلفية الصفحة الرئيسية */
+    .stApp {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+    
+    /* ترويسة المشروع */
+    .project-header {
+        background: linear-gradient(90deg, #0b2b4f 0%, #1b4f8b 100%);
+        padding: 1.8rem 2rem;
+        border-radius: 20px;
+        color: white;
+        margin-bottom: 2rem;
+        box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        border: 1px solid rgba(255,255,255,0.2);
+        backdrop-filter: blur(5px);
+    }
+    
+    .project-header h1 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    /* بطاقات الإحصائيات */
+    .metric-card {
+        background: rgba(255,255,255,0.9);
+        backdrop-filter: blur(10px);
+        padding: 1.8rem 1rem;
+        border-radius: 25px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.5);
+        transition: transform 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+    }
+    
+    .metric-card h3 {
+        color: #2c3e50;
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    
+    .metric-card .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #0b2b4f;
+        line-height: 1.2;
+    }
+    
+    /* فقاعات المحادثة */
+    .chat-message {
+        padding: 1rem 1.5rem;
+        border-radius: 25px;
+        margin-bottom: 1rem;
+        max-width: 80%;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .user-message {
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
+        color: white;
+        margin-left: auto;
+        border-bottom-right-radius: 5px;
+    }
+    
+    .assistant-message {
+        background: white;
+        color: #1e293b;
+        margin-right: auto;
+        border-bottom-left-radius: 5px;
+        border-left: 5px solid #0b2b4f;
+    }
+    
+    .assistant-message::before {
+        content: "🪄 Blue";
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #0b2b4f;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* أزرار مخصصة */
+    .stButton button {
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
+        color: white;
+        border: none;
+        border-radius: 30px;
+        padding: 0.6rem 2rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(11,43,79,0.3);
+    }
+    
+    .stButton button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 20px rgba(11,43,79,0.4);
+    }
+    
+    /* مربعات التحميل */
+    .upload-area {
+        border: 2px dashed #0b2b4f;
+        border-radius: 20px;
+        padding: 2rem;
+        text-align: center;
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(5px);
+        transition: all 0.3s ease;
+    }
+    
+    .upload-area:hover {
+        background: rgba(255,255,255,0.9);
+        border-color: #1b4f8b;
+    }
+    
+    /* تبويبات جميلة */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background: rgba(255,255,255,0.5);
+        backdrop-filter: blur(10px);
+        padding: 0.5rem;
+        border-radius: 40px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 30px;
+        padding: 0.5rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
+        color: white !important;
+    }
+    
+    /* شريط جانبي */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0b2b4f 0%, #0a1e33 100%);
+        color: white;
+    }
+    
+    [data-testid="stSidebar"] .sidebar-content {
+        color: white;
+    }
+    
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        color: white !important;
+    }
+    
+    /* حقول الإدخال */
+    .stTextInput input, .stNumberInput input, .stSelectbox select {
+        border-radius: 30px !important;
+        border: 2px solid #e2e8f0;
+        padding: 0.8rem 1.5rem !important;
+        font-family: 'Cairo', sans-serif;
+    }
+    
+    .stTextInput input:focus, .stNumberInput input:focus {
+        border-color: #0b2b4f !important;
+        box-shadow: 0 0 0 3px rgba(11,43,79,0.1) !important;
+    }
+    
+    /* تحسين التجاوب مع الجوال */
+    @media (max-width: 768px) {
+        .chat-message {
+            max-width: 90%;
+        }
+        .project-header h1 {
+            font-size: 1.8rem;
+        }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# الشريط الجانبي
+with st.sidebar:
+    # الشعار والاسم
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        # محاولة تحميل شعار محلي، وإلا استخدم أيقونة
+        if os.path.exists("logo.png"):
+            st.image("logo.png", width=60)
+        else:
+            st.markdown("🪄", unsafe_allow_html=True)  # أيقونة بديلة
+    with col2:
+        st.markdown("## BluePrint")
+        st.markdown("##### Engineering Consultancy")
+    
+    st.markdown("---")
+    
+    # زر تبديل اللغة
+    st.button(
+        "🇺🇸 English" if st.session_state.language == "ar" else "🇸🇦 العربية",
+        on_click=switch_lang,
+        use_container_width=True
+    )
+    
+    st.markdown("---")
+    
+    # إنشاء مشروع جديد
+    st.markdown(f"### {_('📁 مشروع جديد', '📁 New Project')}")
+    with st.form("new_project", clear_on_submit=True):
+        name = st.text_input(_("اسم المشروع", "Project Name"), placeholder=_("مثال: برج الأندلس", "Example: Andalusia Tower"))
+        location = st.text_input(_("الموقع", "Location"), value="Cairo")
+        if st.form_submit_button(_("🚀 إنشاء", "🚀 Create"), use_container_width=True):
+            if name:
+                r = requests.post(f"{BACKEND}/create_project", params={"name": name, "location": location})
+                if r.ok:
+                    st.success(_("✅ تم إنشاء المشروع!", "✅ Project created!"))
+                    time.sleep(1)
+                    st.rerun()
+    
+    st.markdown("---")
+    
+    # اختيار مشروع موجود
+    st.markdown(f"### {_('📂 المشاريع', '📂 Projects')}")
+    try:
+        projs = requests.get(f"{BACKEND}/projects").json()
+        if projs:
+            proj_options = {f"{p['id']} - {p['name']} ({p['location']})": p['id'] for p in projs}
+            selected_label = st.selectbox(
+                _("اختر مشروع", "Select Project"),
+                options=list(proj_options.keys())
+            )
+            if selected_label:
+                st.session_state.selected_project = proj_options[selected_label]
+                # جلب بيانات المشروع المحدد
+                try:
+                    project_data = requests.get(f"{BACKEND}/project_data/{st.session_state.selected_project}").json()
+                except:
+                    project_data = {}
+        else:
+            st.info(_("✨ لا توجد مشاريع بعد، أنشئ أول مشروع", "✨ No projects yet, create your first project"))
+    except Exception as e:
+        st.error(_("🔌 لا يمكن الاتصال بالخادم", "🔌 Cannot connect to server"))
+        st.stop()
+    
+    if st.session_state.selected_project:
+        st.markdown("---")
+        st.markdown(f"### {_('⚙️ الإجراءات', '⚙️ Actions')}")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(_("📄 تقرير PDF", "📄 PDF Report"), use_container_width=True):
+                st.markdown(f"[{_('⬇️ تحميل', '⬇️ Download')}]({BACKEND}/export_pdf/{st.session_state.selected_project})")
+        with col2:
+            if st.button(_("🗑️ حذف", "🗑️ Delete"), use_container_width=True):
+                if st.session_state.selected_project:
+                    r = requests.delete(f"{BACKEND}/project/{st.session_state.selected_project}")
+                    if r.ok:
+                        st.success(_("✅ تم الحذف", "✅ Deleted"))
+                        st.session_state.selected_project = None
+                        st.rerun()
+
+# المحتوى الرئيسي
+if not st.session_state.selected_project:
+    # شاشة الترحيب
+    st.markdown("""
+    <div style="text-align: center; padding: 4rem 2rem;">
+        <h1 style="font-size: 4rem; color: #0b2b4f;">🪄 BluePrint</h1>
+        <h2 style="color: #2c3e50; font-weight: 400;">Engineering Consultancy</h2>
+        <p style="font-size: 1.2rem; color: #4a5568; margin-top: 2rem;">نظام تشغيل هندسي ذكي يعمل بالذكاء الاصطناعي</p>
+        <div style="margin-top: 3rem;">
+            <p style="color: #718096;">قم بإنشاء مشروع جديد أو اختيار مشروع من القائمة الجانبية للبدء</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+# جلب بيانات المشروع (محدث)
+project_id = st.session_state.selected_project
+try:
+    data = requests.get(f"{BACKEND}/project_data/{project_id}").json()
+    if "error" in data:
+        st.error(data["error"])
+        st.stop()
+except:
+    st.error(_("❌ فشل في تحميل بيانات المشروع", "❌ Failed to load project data"))
+    st.stop()
+
+# عنوان المشروع مع تصميم جذاب
+st.markdown(f"""
+<div class="project-header">
+    <h1>🏗️ {data['project_info']['name']}</h1>
+    <p style="font-size: 1.2rem; opacity: 0.9;">
+        📍 {data['project_info']['location']} | 
+        🕒 {_('آخر تحديث', 'Last updated')}: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+# تبويبات الواجهة
+tab_names = [_("📊 لوحة المعلومات", "📊 Dashboard"),
+             _("💬 المحادثة مع Blue", "💬 Chat with Blue"),
+             _("📦 الحصر (BOQ)", "📦 BOQ"),
+             _("🔍 العيوب", "🔍 Defects"),
+             _("📋 الأرشيف", "📋 Archive")]
+tabs = st.tabs(tab_names)
+
+# ========== لوحة المعلومات (Dashboard) ==========
+with tabs[0]:
+    st.markdown(f"## {_('📈 نظرة عامة على المشروع', '📈 Project Overview')}")
+    
+    # إحصائيات سريعة
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>{_('📊 تحليلات', '📊 Analyses')}</h3>
+            <div class="metric-value">{len(data.get('timeline', []))}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>{_('📎 ملفات', '📎 Files')}</h3>
+            <div class="metric-value">{data.get('files_count', 0)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        total_cost = data.get('boq', {}).get('total_cost', 0)
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>{_('💰 التكلفة', '💰 Cost')}</h3>
+            <div class="metric-value">{total_cost:,.0f} {_('جنيه', 'EGP')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
+        defects_count = len(data.get('defects', []))
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>{_('⚠️ عيوب', '⚠️ Defects')}</h3>
+            <div class="metric-value">{defects_count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # رسم بياني لتوزيع التكاليف
+    if data.get('boq', {}).get('items'):
+        df = pd.DataFrame(data['boq']['items'])
+        fig = px.bar(df, x='desc', y='price', 
+                     title=_('تكلفة بنود الحصر', 'BOQ Items Cost'),
+                     labels={'desc': _('البند', 'Item'), 'price': _('السعر (جنيه)', 'Price (EGP)')},
+                     color_discrete_sequence=['#0b2b4f'])
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font_family='Cairo',
+            title_font_size=20,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info(_("📉 لا توجد بيانات حصر كافية لإنشاء رسم بياني", "📉 No BOQ data to display chart"))
+
+# ========== المحادثة مع Blue (Chat) ==========
+with tabs[1]:
+    st.markdown(f"## {_('💬 التحدث مع Blue - مساعدك الهندسي الذكي', '💬 Chat with Blue - Your AI Engineering Assistant')}")
+    
+    # عرض سجل المحادثة
+    chat_container = st.container()
+    with chat_container:
+        for msg in st.session_state.msgs:
+            role_class = "user-message" if msg["role"] == "user" else "assistant-message"
+            with st.chat_message(msg["role"]):
+                st.markdown(f'<div class="chat-message {role_class}">{msg["content"]}</div>', unsafe_allow_html=True)
+    
+    # منطقة الإدخال ورفع الملفات
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        prompt = st.chat_input(_("اكتب طلبك هنا... (مثال: صمم كمرة طول 5 متر وحمل 2 طن)", "Type your request here... (e.g., design a beam 5m span, load 2 tons)"))
+    with col2:
+        with st.expander(_("📎 رفع ملفات", "📎 Upload files")):
+            uploaded_files = st.file_uploader(
+                _("اختر ملفات", "Choose files"),
+                type=["jpg", "png", "jpeg", "pdf", "dwg"],
+                accept_multiple_files=True,
+                label_visibility="collapsed"
+            )
+            if uploaded_files:
+                st.success(f"✅ {len(uploaded_files)} {_('ملف', 'file(s)')}")
+    
+    if prompt or uploaded_files:
+        # إضافة رسالة المستخدم
+        if prompt:
+            st.session_state.msgs.append({"role": "user", "content": prompt})
+        
+        # معالجة كل ملف مرفوع
+        for uploaded_file in (uploaded_files or []):
+            with st.spinner(_("🪄 Blue يفكر...", "🪄 Blue is thinking...")):
+                files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
+                data_payload = {
+                    "message": prompt or "",
+                    "project_id": project_id,
+                    "history": json.dumps(st.session_state.msgs)
+                }
+                try:
+                    r = requests.post(f"{BACKEND}/process", data=data_payload, files=files, timeout=60)
+                    
+                    if r.ok:
+                        res = r.json()
+                        ans_text = ""
+                        
+                        # عرض نتائج المساعد
+                        results = res.get("results", {})
+                        for k, v in results.items():
+                            if k == "image_data":
+                                st.image(base64.b64decode(v), caption=_("🖼️ الرسم التنفيذي", "🖼️ Design Drawing"), use_container_width=True)
+                            elif k == "dxf_data":
+                                st.download_button(
+                                    label=_("⬇️ تحميل ملف CAD (DXF)", "⬇️ Download CAD (DXF)"),
+                                    data=base64.b64decode(v),
+                                    file_name="design.dxf",
+                                    mime="application/dxf"
+                                )
+                            elif k in ["checklist_data", "boq_item"]:
+                                pass
+                            elif "تحذير" in k or "warning" in k.lower():
+                                st.warning(v)
+                            else:
+                                st.markdown(f"**{k}**")
+                                st.markdown(v)
+                            
+                            if isinstance(v, str):
+                                ans_text += v + "\n"
+                        
+                        # حفظ رد المساعد
+                        if ans_text:
+                            st.session_state.msgs.append({"role": "assistant", "content": ans_text})
+                    else:
+                        st.error(_("❌ فشل في الاتصال بالخادم", "❌ Failed to connect to server"))
+                except Exception as e:
+                    st.error(f"⚠️ {_('خطأ', 'Error')}: {str(e)}")
+        
+        # إعادة تشغيل لعرض الرسائل الجديدة
+        st.rerun()
+
+# ========== الحصر (BOQ) ==========
+with tabs[2]:
+    st.subheader(_("📋 جدول الكميات والتكاليف", "📋 Bill of Quantities"))
+    
+    boq_items = data.get('boq', {}).get('items', [])
+    if boq_items:
+        df_boq = pd.DataFrame(boq_items)
+        st.dataframe(
+            df_boq,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "desc": _("الوصف", "Description"),
+                "unit": _("الوحدة", "Unit"),
+                "qty": _("الكمية", "Quantity"),
+                "price": _("السعر (جنيه)", "Price (EGP)")
+            }
+        )
+        st.markdown(f"### 💰 {_('الإجمالي التقديري', 'Estimated Total')}: **{data['boq']['total_cost']:,.2f} {_('جنيه', 'EGP')}**")
+    else:
+        st.info(_("📭 لا توجد كميات محصورة بعد.", "📭 No BOQ items yet."))
+    
+    # إضافة بند يدوي
+    with st.expander(_("➕ إضافة بند حصر يدوي", "➕ Add Manual BOQ Item")):
+        with st.form("manual_boq"):
+            desc = st.text_input(_("الوصف", "Description"))
+            unit = st.selectbox(_("الوحدة", "Unit"), ["م3", "طن", "م2", "عدد"])
+            qty = st.number_input(_("الكمية", "Quantity"), min_value=0.0, step=0.1)
+            price = st.number_input(_("السعر الإجمالي", "Total Price"), min_value=0.0, step=100.0)
+            if st.form_submit_button(_("💾 إضافة", "💾 Add"), use_container_width=True):
+                try:
+                    r = requests.post(f"{BACKEND}/add_boq/{project_id}", params={
+                        "desc": desc, "unit": unit, "qty": qty, "price": price
+                    })
+                    if r.ok:
+                        st.success(_("✅ تمت الإضافة", "✅ Added"))
+                        st.rerun()
+                except:
+                    st.error(_("❌ فشل الاتصال", "❌ Connection failed"))
+
+# ========== العيوب ==========
+with tabs[3]:
+    st.subheader(_("🔎 إدارة العيوب", "🔎 Defects Management"))
+    
+    defects = data.get('defects', [])
+    if defects:
+        for defect in defects:
+            with st.container():
+                cols = st.columns([4, 1, 1, 1])
+                with cols[0]:
+                    st.markdown(f"**{defect['desc']}**")
+                with cols[1]:
+                    severity_color = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}.get(defect['severity'], "⚪")
+                    st.markdown(f"{severity_color} {defect['severity']}")
+                with cols[2]:
+                    status_icon = "✅" if defect['status'] == "Resolved" else "⏳"
+                    st.markdown(f"{status_icon} {defect['status']}")
+                with cols[3]:
+                    if st.button(_("✏️", "✏️"), key=f"edit_{defect['id']}"):
+                        st.info(_("قريباً...", "Coming soon..."))
+                st.markdown("---")
+    else:
+        st.info(_("✨ لا توجد عيوب مسجلة. ارفع صورة موقع للكشف عن العيوب تلقائياً!", "✨ No defects recorded. Upload a site image to detect defects automatically!"))
+
+# ========== الأرشيف ==========
+with tabs[4]:
+    st.subheader(_("📚 سجل المشروع", "📚 Project Timeline"))
+    timeline = data.get('timeline', [])
+    if timeline:
+        for item in timeline:
+            with st.expander(f"**{item.get('task')}** - {item.get('date')}"):
+                st.json(item)
+    else:
+        st.info(_("📭 لا يوجد سجل بعد.", "📭 No timeline yet."))  
+
+
+الملفات الكاملة بعد التعديلات (جاهزة للنسخ واللصق)
+1. ملف database.py
+python
+import sys
+import os
+sys.stdout.reconfigure(encoding='utf-8')
+
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, JSON, Float, Boolean
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from datetime import datetime
+
+SQLALCHEMY_DATABASE_URL = "sqlite:///./engineering_os_v8.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class Project(Base):
+    __tablename__ = "projects"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    location = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    analyses = relationship("Analysis", back_populates="project", cascade="all, delete-orphan")
+    site_reports = relationship("SiteReport", back_populates="project", cascade="all, delete-orphan")
+    boq_items = relationship("BOQItem", back_populates="project", cascade="all, delete-orphan")
+    files = relationship("UploadedFile", back_populates="project", cascade="all, delete-orphan")
+    defects = relationship("Defect", back_populates="project", cascade="all, delete-orphan")
+
+class Analysis(Base):
+    __tablename__ = "analyses"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    task_type = Column(String)
+    input_text = Column(Text)
+    result_json = Column(JSON)
+    safety_status = Column(String, default="Pending") # Safe, Unsafe
+    created_at = Column(DateTime, default=datetime.utcnow)
+    project = relationship("Project", back_populates="analyses")
+
+class SiteReport(Base):
+    __tablename__ = "site_reports"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    report_date = Column(DateTime, default=datetime.utcnow)
+    weather = Column(String)
+    workers_count = Column(Integer)
+    summary = Column(Text)
+    issues = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    project = relationship("Project", back_populates="site_reports")
+
+class BOQItem(Base):
+    __tablename__ = "boq_items"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    description = Column(String)
+    unit = Column(String)
+    quantity = Column(Float)
+    unit_price = Column(Float)
+    total_price = Column(Float)
+    project = relationship("Project", back_populates="boq_items")
+
+# 🟢 جداول جديدة
+class UploadedFile(Base):
+    __tablename__ = "uploaded_files"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    filename = Column(String)
+    file_type = Column(String) # image, pdf, dwg
+    file_path = Column(String) # مسار الحفظ
+    analyzed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    project = relationship("Project", back_populates="files")
+
+class Defect(Base):
+    __tablename__ = "defects"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    description = Column(Text)
+    severity = Column(String) # Low, Medium, High
+    status = Column(String, default="Open") # Open, Resolved
+    image_id = Column(Integer, ForeignKey("uploaded_files.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    project = relationship("Project", back_populates="defects")
+
+# ---------- إضافة جديدة: جدول إعدادات المشروع ----------
+class ProjectSettings(Base):
+    __tablename__ = "project_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), unique=True)
+    concrete_price = Column(Float, default=1000.0)   # سعر المتر المكعب
+    steel_price = Column(Float, default=35000.0)     # سعر الطن
+    preferred_ai_model = Column(String, default="gemini")  # النموذج المفضل
+    created_at = Column(DateTime, default=datetime.utcnow)
+    project = relationship("Project", backref="settings", uselist=False)
+# -----------------------------------------------------
+
+def init_db():
+    Base.metadata.create_all(bind=engine)
+2. ملف main.py
+python
+import sys
+import os
+import base64
+import io
+import logging
+import json
+import shutil
+from datetime import datetime
+from sqlalchemy import func
+
+# إعداد الترميز
+sys.stdout.reconfigure(encoding='utf-8')
+
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response, FileResponse
+import pandas as pd
+import tempfile
+
+# استيراد قاعدة البيانات والنماذج
+from database import (
+    init_db, SessionLocal, 
+    Project, Analysis, SiteReport, BOQItem, 
+    UploadedFile, Defect, ProjectSettings
+)
+
+# استيراد العقل المدبر (Orchestrator)
+from orchestrator import route_request
+
+# استيراد مولد الـ PDF
+from pdf_generator import generate_project_report
+
+# إعداد الـ Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("main")
+
+# تهيئة التطبيق
+app = FastAPI(title="Engineering OS v8.0 - Multi-Model AI")
+
+# إعداد الـ CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# إعداد مجلد الرفع
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.on_event("startup")
+def on_startup():
+    """تهيئة قاعدة البيانات عند بدء التشغيل"""
+    init_db()
+    logger.info("Database Initialized with new schema (Files, Defects, Settings).")
+
+# --- Endpoints المشاريع ---
+
+@app.post("/create_project")
+def create_project(name: str, location: str = "Cairo"):
+    db = SessionLocal()
+    try:
+        proj = Project(name=name, location=location)
+        db.add(proj)
+        db.commit()
+        db.refresh(proj)
+        logger.info(f"Created Project: {proj.name}")
+        return {"id": proj.id, "name": proj.name}
+    except Exception as e:
+        logger.error(f"Error creating project: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+
+@app.get("/projects")
+def get_projects():
+    db = SessionLocal()
+    try:
+        projects = db.query(Project).all()
+        return [{"id": p.id, "name": p.name, "location": p.location} for p in projects]
+    finally:
+        db.close()
+
+@app.delete("/project/{project_id}")
+def delete_project(project_id: int):
+    db = SessionLocal()
+    try:
+        proj = db.query(Project).filter(Project.id == project_id).first()
+        if proj:
+            db.delete(proj)
+            db.commit()
+            logger.info(f"Deleted Project ID: {project_id}")
+        return {"success": True}
+    finally:
+        db.close()
+
+# --- Endpoint جلب البيانات ---
+
+@app.get("/project_data/{project_id}")
+def get_project_data(project_id: int):
+    db = SessionLocal()
+    try:
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            return {"error": "Project not found"}
+        
+        # جلب كل البيانات
+        analyses = db.query(Analysis).filter(Analysis.project_id == project_id).order_by(Analysis.created_at.desc()).all()
+        boqs = db.query(BOQItem).filter(BOQItem.project_id == project_id).all()
+        defects = db.query(Defect).filter(Defect.project_id == project_id).all()
+        files = db.query(UploadedFile).filter(UploadedFile.project_id == project_id).all()
+
+        # تنسيق البيانات
+        total_cost = sum([b.total_price or 0 for b in boqs])
+
+        return {
+            "project_info": {"name": project.name, "location": project.location},
+            "timeline": [
+                {
+                    "type": "analysis", 
+                    "date": a.created_at.strftime("%Y-%m-%d %H:%M"), 
+                    "task": a.task_type,
+                    "status": a.safety_status
+                } for a in analyses
+            ],
+            "boq": {
+                "items": [{"id": b.id, "desc": b.description, "unit": b.unit, "qty": b.quantity, "price": b.total_price} for b in boqs],
+                "total_cost": total_cost
+            },
+            "defects": [
+                {"id": d.id, "desc": d.description, "severity": d.severity, "status": d.status} for d in defects
+            ],
+            "files_count": len(files)
+        }
+    finally:
+        db.close()
+
+# --- Endpoint المعالجة الرئيسي (Main Process) ---
+
+@app.post("/process")
+async def process_request(
+    message: str = Form(None), 
+    project_id: int = Form(...), 
+    file: UploadFile = File(None), 
+    history: str = Form("[]")
+):
+    # 1. قراءة الملف
+    file_bytes = await file.read() if file else None
+    file_type = file.content_type if file else None
+    
+    db = SessionLocal()
+    file_record = None
+    
+    # 2. حفظ الملف (لو موجود) في قاعدة البيانات والديسك
+    try:
+        if file_bytes and file:
+            # حفظ على الديسك
+            file_path = os.path.join(UPLOAD_DIR, f"{project_id}_{file.filename}")
+            with open(file_path, "wb") as f:
+                f.write(file_bytes)
+            
+            # حفظ في الـ DB
+            file_record = UploadedFile(
+                project_id=project_id, 
+                filename=file.filename, 
+                file_type=file_type, 
+                file_path=file_path,
+                analyzed=True
+            )
+            db.add(file_record)
+            db.commit()
+            db.refresh(file_record)
+            logger.info(f"File saved: {file.filename}")
+    except Exception as e:
+        logger.error(f"File saving error: {e}")
+    finally:
+        db.close()  # نغلق الجلسة بعد حفظ الملف
+
+    # 3. تشغيل العقل المدبر (Orchestrator) - Async
+    result = await route_request(message, file_bytes, file_type, project_id, json.loads(history))
+    
+    # 4. حفظ نتائج الـ Orchestrator في قاعدة البيانات (نحتاج جلسة جديدة)
+    db = SessionLocal()
+    try:
+        domain = result.get("domain")
+        results = result.get("results", {})
+        
+        # حفظ الحصر (BOQ)
+        if domain == "boq" and "boq_item" in results:
+            item = results["boq_item"]
+            new_item = BOQItem(
+                project_id=project_id,
+                description=item.get("description"),
+                unit=item.get("unit"),
+                quantity=item.get("quantity"),
+                total_price=item.get("total_price", 0)
+            )
+            db.add(new_item)
+        
+        # حفظ التحليلات (Design)
+        elif domain == "design":
+            new_analysis = Analysis(
+                project_id=project_id,
+                task_type=result.get("task"),
+                input_text=message,
+                result_json=result,
+                safety_status="Unsafe" if "⚠️ تحذير" in str(results) else "Safe"
+            )
+            db.add(new_analysis)
+        
+        # حفظ العيوب (Site Defects)
+        elif domain == "site":
+            # حفظ تقرير الموقع
+            if "checklist_data" in results:
+                report = SiteReport(
+                    project_id=project_id,
+                    summary=message,
+                    issues=json.dumps(results["checklist_data"])
+                )
+                db.add(report)
+            
+            # حفظ العيوب المكتشفة بالـ Vision
+            if "⚠️ العيوب" in results:
+                new_defect = Defect(
+                    project_id=project_id,
+                    description=results["⚠️ العيوب"],
+                    severity="Medium", # يمكن تحديدها بـ AI لاحقاً
+                    status="Open",
+                    image_id=file_record.id if file_record else None
+                )
+                db.add(new_defect)
+        
+        # حفظ ردود الدردشة العادية في timeline (اختياري)
+        elif domain == "general" and message:
+            # يمكن حفظها كتحليل عام
+            new_analysis = Analysis(
+                project_id=project_id,
+                task_type="chat",
+                input_text=message,
+                result_json=result,
+                safety_status="Safe"
+            )
+            db.add(new_analysis)
+                
+        db.commit()
+        logger.info(f"Data saved for Project {project_id} - Domain: {domain}")
+        
+    except Exception as e:
+        logger.error(f"Database Save Error: {e}")
+        db.rollback()
+    finally:
+        db.close()
+        
+    return result
+
+# --- Endpoint تصدير PDF ---
+
+@app.get("/export_pdf/{project_id}")
+def export_pdf(project_id: int):
+    try:
+        pdf_bytes = generate_project_report(project_id)
+        if pdf_bytes:
+            return Response(
+                content=pdf_bytes, 
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename=report_{project_id}.pdf"}
+            )
+        return {"error": "Could not generate PDF"}
+    except Exception as e:
+        logger.error(f"PDF Export Error: {e}")
+        return {"error": str(e)}
+
+# --- Endpoint إضافة بند حصر يدوي (تمت إضافته ليتوافق مع الواجهة) ---
+
+@app.post("/add_boq/{project_id}")
+def add_boq_item(project_id: int, desc: str, unit: str, qty: float, price: float):
+    db = SessionLocal()
+    try:
+        new_item = BOQItem(
+            project_id=project_id,
+            description=desc,
+            unit=unit,
+            quantity=qty,
+            total_price=price
+        )
+        db.add(new_item)
+        db.commit()
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Add BOQ error: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+
+# ---------- إضافة جديدة: حذف بند حصر ----------
+@app.delete("/boq/{boq_id}")
+def delete_boq_item(boq_id: int):
+    db = SessionLocal()
+    try:
+        item = db.query(BOQItem).filter(BOQItem.id == boq_id).first()
+        if item:
+            db.delete(item)
+            db.commit()
+            return {"success": True}
+        return {"error": "BOQ item not found"}
+    except Exception as e:
+        logger.error(f"Delete BOQ error: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+# -----------------------------------------------------
+
+# ---------- إضافة جديدة: تعديل عيب ----------
+@app.put("/defect/{defect_id}")
+def update_defect(defect_id: int, description: str = None, severity: str = None, status: str = None):
+    db = SessionLocal()
+    try:
+        defect = db.query(Defect).filter(Defect.id == defect_id).first()
+        if not defect:
+            return {"error": "Defect not found"}
+        if description:
+            defect.description = description
+        if severity:
+            defect.severity = severity
+        if status:
+            defect.status = status
+        db.commit()
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Update defect error: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+
+# ---------- إضافة جديدة: حذف عيب ----------
+@app.delete("/defect/{defect_id}")
+def delete_defect(defect_id: int):
+    db = SessionLocal()
+    try:
+        defect = db.query(Defect).filter(Defect.id == defect_id).first()
+        if defect:
+            db.delete(defect)
+            db.commit()
+            return {"success": True}
+        return {"error": "Defect not found"}
+    except Exception as e:
+        logger.error(f"Delete defect error: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+# -----------------------------------------------------
+
+# ---------- إضافة جديدة: إعدادات المشروع ----------
+@app.get("/project_settings/{project_id}")
+def get_project_settings(project_id: int):
+    db = SessionLocal()
+    try:
+        settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
+        if not settings:
+            # إنشاء إعدادات افتراضية إذا لم توجد
+            settings = ProjectSettings(project_id=project_id)
+            db.add(settings)
+            db.commit()
+            db.refresh(settings)
+        return {
+            "concrete_price": settings.concrete_price,
+            "steel_price": settings.steel_price,
+            "preferred_ai_model": settings.preferred_ai_model
+        }
+    finally:
+        db.close()
+
+@app.post("/project_settings/{project_id}")
+def save_project_settings(project_id: int, concrete_price: float, steel_price: float, preferred_ai_model: str):
+    db = SessionLocal()
+    try:
+        settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
+        if not settings:
+            settings = ProjectSettings(project_id=project_id)
+            db.add(settings)
+        settings.concrete_price = concrete_price
+        settings.steel_price = steel_price
+        settings.preferred_ai_model = preferred_ai_model
+        db.commit()
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Save settings error: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+# -----------------------------------------------------
+
+# --- Endpoint إحصائيات المشروع (اختياري للوحة المعلومات) ---
+
+@app.get("/project_stats/{project_id}")
+def project_stats(project_id: int):
+    db = SessionLocal()
+    try:
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            return {"error": "Project not found"}
+        
+        analyses_count = db.query(Analysis).filter(Analysis.project_id == project_id).count()
+        files_count = db.query(UploadedFile).filter(UploadedFile.project_id == project_id).count()
+        defects_count = db.query(Defect).filter(Defect.project_id == project_id).count()
+        total_cost = db.query(func.sum(BOQItem.total_price)).filter(BOQItem.project_id == project_id).scalar() or 0
+        
+        return {
+            "analyses_count": analyses_count,
+            "files_count": files_count,
+            "defects_count": defects_count,
+            "total_cost": total_cost
+        }
+    finally:
+        db.close()
+
+# ---------- إضافة جديدة: تصدير BOQ إلى Excel ----------
+@app.get("/export_boq/{project_id}")
+def export_boq_excel(project_id: int):
+    db = SessionLocal()
+    try:
+        boqs = db.query(BOQItem).filter(BOQItem.project_id == project_id).all()
+        if not boqs:
+            return {"error": "No BOQ items"}
+        
+        data = []
+        for b in boqs:
+            data.append({
+                "الوصف": b.description,
+                "الوحدة": b.unit,
+                "الكمية": b.quantity,
+                "السعر الإجمالي": b.total_price
+            })
+        df = pd.DataFrame(data)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+            df.to_excel(tmp.name, index=False)
+            return FileResponse(tmp.name, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=f"boq_project_{project_id}.xlsx")
+    except Exception as e:
+        logger.error(f"Export BOQ error: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+# -----------------------------------------------------
+3. ملف tools.py
+python
+import logging
+import math
+import base64
+import io
+import ezdxf
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
+logger = logging.getLogger("tools")
+
+UNIT_PRICES = {"concrete_m3": 1000, "steel_ton": 35000}
+
+# ---------- إضافة جديدة: تحديث أسعار المواد من قاعدة البيانات ----------
+def update_unit_prices_from_db(project_id):
+    from database import SessionLocal, ProjectSettings
+    db = SessionLocal()
+    try:
+        settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
+        if settings:
+            global UNIT_PRICES
+            UNIT_PRICES["concrete_m3"] = settings.concrete_price
+            UNIT_PRICES["steel_ton"] = settings.steel_price
+    except:
+        pass
+    finally:
+        db.close()
+# -----------------------------------------------------
+
+# --- Design Functions ---
+
+def structural_beam_analysis(length, load):
+    try:
+        L = length; w = load * 10; M = (w * L**2) / 8
+        scenarios = [
+            _calc_beam(L, M, 250, int((L/12.0)*1000), "💰 Economic"),
+            _calc_beam(L, M, 250, int((L/18.0)*1000), "🪶 Lightweight"),
+            _calc_beam(L, M, 300, int((L/10.0)*1000), "🛡️ Safe")
+        ]
+        return {"success": True, "scenarios": scenarios}
+    except Exception as e: return {"success": False, "error": str(e)}
+
+def _calc_beam(L, M, w, d, label):
+    d_eff = d - 40
+    if d_eff <= 0: d_eff = 100
+    As_req = (M * 1e6) / (0.87 * 360 * d_eff)
+    bars = math.ceil(As_req / 201)
+    
+    vol = (w/1000) * (d/1000) * L
+    steel_w = (201 * bars * L * 7.85) / 1000000
+    cost = (vol * UNIT_PRICES['concrete_m3']) + (steel_w * UNIT_PRICES['steel_ton'])
+    
+    return {
+        "label": label, "width_mm": w, "depth_mm": d,
+        "steel_bars": f"{bars} T16", "cost_egp": round(cost),
+        "raw_values": {"type": "beam", "depth_mm": d, "length_m": L, "steel_ratio_percent": round((As_req/(w*d_eff))*100, 2)}
+    }
+
+def slab_analysis(length_short, length_long, thickness=0):
+    try:
+        ratio = length_long / length_short
+        type_str = "Two-Way" if ratio < 2 else "One-Way"
+        t = thickness if thickness > 0 else (length_short * 1000 / 30)
+        
+        # حساب تقريبي للحديد
+        load = 15.0 # kN/m2 approx
+        M = (load * length_short**2) / 8 # Simplified
+        As_req = (M * 1e6) / (0.87 * 360 * (t-20))
+        
+        return {
+            "success": True,
+            "results": {
+                "explanation": f"🔲 **بلاطة {type_str}**: السمك المطلوب {t:.0f} مم، الحديد التقريبي {As_req/201:.2f} قضيب/متر",
+                "raw_values": {"type": "slab", "thickness_mm": t}
+            }
+        }
+    except Exception as e: return {"success": False, "error": str(e)}
+
+def column_analysis(axial_load, height):
+    try:
+        # تصميم عمود بسيط
+        Pu = axial_load * 1.5 * 10 # Factored Load
+        Ag = Pu / (0.4 * 30) # Approx Area
+        side = math.sqrt(Ag) * 1000
+        
+        return {
+            "success": True,
+            "results": {
+                "explanation": f"🏗️ **عمود**: المقاس المقترح {side:.0f}x{side:.0f} مم للحمل {axial_load} ك.ن",
+                "raw_values": {"type": "column"}
+            }
+        }
+    except Exception as e: return {"success": False, "error": str(e)}
+
+def foundation_analysis(load, soil_capacity):
+    try:
+        # تصميم قاعدة منفصلة
+        area = (load * 1.5) / (soil_capacity * 10) # m2
+        side = math.sqrt(area)
+        thickness = side * 0.5 # Approx thickness
+        
+        return {
+            "success": True,
+            "results": {
+                "explanation": f"🧱 **قاعدة**: الأبعاد {side:.2f}x{side:.2f} متر، سمك {thickness*100:.0f} سم",
+                "raw_values": {"type": "foundation"}
+            }
+        }
+    except Exception as e: return {"success": False, "error": str(e)}
+
+# ---------- إضافة جديدة: تصميم جدار استنادي ----------
+def retaining_wall_analysis(height, soil_load):
+    """
+    تصميم مبسط لجدار استنادي
+    height: ارتفاع الجدار بالمتر
+    soil_load: حمل التربة (kN/m2) تقديري
+    """
+    try:
+        # سمك القاعدة غالباً = 0.1 * الارتفاع + 0.3
+        base_thickness = 0.1 * height + 0.3
+        # عرض القاعدة = 0.5 * الارتفاع
+        base_width = 0.5 * height
+        # تسليح تقريبي
+        steel_main = f"16mm كل 200 مم"
+        return {
+            "success": True,
+            "results": {
+                "explanation": f"🧱 **جدار استنادي**: ارتفاع {height} م، عرض القاعدة {base_width:.2f} م، سمك القاعدة {base_thickness:.2f} م، تسليح رئيسي {steel_main}",
+                "raw_values": {"type": "retaining_wall", "height": height, "base_width": base_width, "base_thickness": base_thickness}
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# ---------- إضافة جديدة: تصميم سلم ----------
+def stair_analysis(floor_height, riser=0.17, tread=0.30):
+    """
+    تصميم سلم خرساني
+    floor_height: ارتفاع الدور (متر)
+    riser: ارتفاع القائمة (متر)
+    tread: عرض النائمة (متر)
+    """
+    try:
+        number_of_risers = floor_height / riser
+        number_of_treads = number_of_risers - 1
+        flight_length = number_of_treads * tread
+        # سمك السلم تقديري
+        thickness = flight_length * 0.03  # تقريبي
+        return {
+            "success": True,
+            "results": {
+                "explanation": f"🪜 **سلم**: عدد القوائم {number_of_risers:.0f}، طول الباي {flight_length:.2f} م، السمك التقريبي {thickness*100:.0f} مم",
+                "raw_values": {"type": "stair", "risers": number_of_risers, "flight_length": flight_length, "thickness_mm": thickness*1000}
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+# -----------------------------------------------------
+
+# --- BOQ Functions ---
+def boq_steel_calculator(d, l, c):
+    wt = (d**2 / 162.2 * l * c) / 1000
+    cost = wt * UNIT_PRICES['steel_ton']
+    return {"success": True, "item": {"description": f"Steel {d}mm", "unit": "Ton", "quantity": round(wt,3), "total_price": round(cost)}}
+
+def boq_concrete_calculator(v):
+    cost = v * UNIT_PRICES['concrete_m3']
+    return {"success": True, "item": {"description": "Concrete", "unit": "M3", "quantity": v, "total_price": round(cost)}}
+
+# --- Drawing & CAD ---
+def generate_beam_dxf(w, d, bars):
+    try:
+        doc = ezdxf.new()
+        msp = doc.modelspace()
+        msp.add_lwpolyline([(0,0), (w,0), (w,d), (0,d)], close=True)
+        stream = io.BytesIO()
+        doc.write(stream)
+        stream.seek(0)
+        return base64.b64encode(stream.read()).decode('utf-8')
+    except: return None
+
+def draw_beam_section(w, d, bars):
+    try:
+        fig, ax = plt.subplots(1, figsize=(6,6))
+        ax.add_patch(patches.Rectangle((0,0), w, d, facecolor='#f0f0f0', edgecolor='black'))
+        sp = (w - 80) / (bars + 1) if bars > 0 else 0
+        for i in range(bars):
+            ax.add_patch(patches.Circle((40 + sp*(i+1), 50), 10, color='blue'))
+        ax.set_aspect('equal')
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        img = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close()
+        return img
+    except: return None
+
+def get_site_checklist(work_type):
+    data = {
+        "نجارة": ["مراجعة أبعاد", "رأسية الأعمدة"],
+        "حدادة": ["أقطار الحديد", "التوشيك"],
+        "صب": ["التربيط", "الدمك"],
+        "عمود": ["الرأسية", "أماكن الوصلات"],
+        "قاعدة": ["النظافة", "الغطاء الخرساني"]
+    }
+    items = data.get(work_type, ["عام"])
+    text = f"📋 **تشك ليست {work_type}:**\n"
+    for i, item in enumerate(items, 1): text += f"{i}. {item}\n"
+    return {"success": True, "items": items, "text": text}
+4. ملف agents.py
+python
+import logging
+import json
+from llm_provider import llm
+from tools import (
+    structural_beam_analysis, slab_analysis, column_analysis, 
+    foundation_analysis, draw_beam_section, generate_beam_dxf,
+    retaining_wall_analysis, stair_analysis  # استيراد الأدوات الجديدة
+)
+from rules_engine import check_structural_safety
+
+logger = logging.getLogger("agents")
+
+# --- 1. وكيل التصميم ---
+class StructuralAgent:
+    def __init__(self):
+        self.name = "Blue-Struct"
+    
+    def analyze(self, text, nums):
+        results = {}
+        # نفس الكود القديم للحسابات تماماً
+        if "كمرة" in text or "ميدة" in text:
+            res = structural_beam_analysis(nums[0] if nums else 5.0, nums[1] if len(nums)>1 else 2.0)
+            if res["success"]:
+                best = res["scenarios"][0] 
+                safety = check_structural_safety(best['raw_values'])
+                
+                results["📊 النتائج"] = f"Best: {best['label']} | Depth: {best['depth_mm']}mm | Cost: {best['cost_egp']} EGP"
+                if not safety["is_safe"]: results["⚠️ تحذير"] = "\n".join(safety["warnings"])
+                
+                bars = int(best['steel_bars'].split()[0])
+                results["image_data"] = draw_beam_section(best['width_mm'], best['depth_mm'], bars)
+                results["dxf_data"] = generate_beam_dxf(best['width_mm'], best['depth_mm'], bars)
+
+        # إضافة تحليل الجدار الاستنادي
+        if "جدار استنادي" in text or "retaining wall" in text:
+            height = nums[0] if nums else 3.0
+            soil_load = nums[1] if len(nums)>1 else 20.0
+            res = retaining_wall_analysis(height, soil_load)
+            if res["success"]:
+                results["📐 نتائج الجدار"] = res["results"]["explanation"]
+                results["raw_values"] = res["results"]["raw_values"]
+
+        # إضافة تحليل السلم
+        if "سلم" in text or "stair" in text:
+            floor_height = nums[0] if nums else 3.0
+            res = stair_analysis(floor_height)
+            if res["success"]:
+                results["📐 نتائج السلم"] = res["results"]["explanation"]
+                results["raw_values"] = res["results"]["raw_values"]
+
+        return results
+
+# --- 2. وكيل الرؤية ---
+class VisionAgent:
+    def __init__(self):
+        self.name = "Blue-Vision"
+
+    async def analyze_image(self, image_base64, prompt):
+        # سيستخدم Gemini أو GPT-4o تلقائياً
+        return await llm.analyze_image(image_base64, prompt)
+
+    async def detect_defects(self, image_base64):
+        prompt = """
+        Analyze this construction site image as a QC Engineer.
+        Identify any visible defects (Honeycombing, Cracks, Exposed Rebar).
+        Return JSON: {"defects": [{"type":"...", "severity":"High/Med/Low"}]}
+        """
+        return await llm.analyze_image(image_base64, prompt)
+
+# --- 3. وكيل التقارير والمنطق ---
+class ReasoningAgent:
+    def __init__(self):
+        self.name = "Blue-Logic"
+
+    async def generate_summary(self, data):
+        prompt = f"""
+        You are an expert engineer. Summarize this data in Arabic.
+        Focus on safety and cost. 
+        Data: {json.dumps(data)}
+        """
+        return await llm.generate_text(prompt, model_preference=["deepseek", "gpt-4o", "gemini"])
+
+    async def chat(self, text, history=None):
+        # إصلاح: استخدام الـ history لفهم السياق
+        full_prompt = text
+        if history:
+            # بناء سياق بسيط من آخر 3 رسائل
+            context = "\n".join([f"{m['role']}: {m['content']}" for m in history[-3:]])
+            full_prompt = f"Context of conversation:\n{context}\n\nUser: {text}\nAssistant:"
+
+        return await llm.generate_text(full_prompt, model_preference=["grok", "gemini", "gpt-3.5"])
+
+# تهيئة الوكلاء
+struct_agent = StructuralAgent()
+vision_agent = VisionAgent()
+reasoning_agent = ReasoningAgent()
+5. ملف orchestrator.py
+python
+import os
+import base64
+import logging
+import json
+import re
+import pypdf
+from io import BytesIO
+from classifier import classify_request
+from agents import struct_agent, vision_agent, reasoning_agent
+from tools import get_site_checklist, boq_steel_calculator, boq_concrete_calculator, update_unit_prices_from_db
+
+logger = logging.getLogger("orchestrator")
+
+async def extract_pdf_text(file_bytes):
+    try:
+        reader = pypdf.PdfReader(BytesIO(file_bytes))
+        text = ""
+        for page in reader.pages: text += page.extract_text() + "\n"
+        return text
+    except: return ""
+
+async def route_request(text=None, file_bytes=None, file_type=None, project_id=None, history=None):
+    results = {}
+    
+    # تحديث الأسعار حسب إعدادات المشروع
+    if project_id:
+        update_unit_prices_from_db(project_id)
+    
+    classification = classify_request(text, file_type)
+    task = classification.get("task", "chat")
+    domain = classification.get("domain", "general")
+    
+    image_base64 = base64.b64encode(file_bytes).decode("utf-8") if file_bytes else None
+    nums = re.findall(r"[-+]?\d*\.\d+|\d+", text or "")
+
+    # --- مسار التصميم ---
+    if domain == "design":
+        results = struct_agent.analyze(text, nums)
+        if results:
+            summary = await reasoning_agent.generate_summary(results)
+            results["🤖 ملخص ذكي"] = summary
+        return {"task": task, "results": results, "domain": domain}
+
+    # --- مسار الموقع ---
+    if domain == "site":
+        if task == "image_analysis" and image_base64:
+            analysis = await vision_agent.analyze_image(image_base64, "حلل الصورة هندسياً")
+            results["📷 التحليل"] = analysis
+            
+            defects = await vision_agent.detect_defects(image_base64)
+            results["⚠️ العيوب"] = defects
+            
+        elif task == "checklist_tool":
+            # كود التشك ليست
+            pass
+            
+        return {"task": task, "results": results, "domain": domain}
+
+    # --- مسار الحصر (BOQ) ---
+    if domain == "boq":
+        # كود الحصر القديم
+        pass
+
+    # --- مسار المكتب الفني ---
+    if domain == "office" and file_bytes:
+        pdf_text = await extract_pdf_text(file_bytes)
+        summary = await reasoning_agent.generate_summary({"text": pdf_text[:2000]})
+        results["📄 تحليل الملف"] = summary
+        return {"task": task, "results": results, "domain": domain}
+
+    # --- عام (الدردشة) ---
+    if text:
+        # إصلاح: تمرير الـ history هنا
+        res = await reasoning_agent.chat(text, history=history)
+        results["💻 Blue"] = res
+        
+    return {"task": task, "results": results, "domain": domain}
+6. ملف llm_provider.py
+python
+import os
+import base64
+import logging
+import json
+import asyncio
+from dotenv import load_dotenv
+
+load_dotenv()
+logger = logging.getLogger("llm_provider")
+
+# إعداد المكتبات
+try:
+    from openai import AsyncOpenAI  # تغيير هام لدعم Async
+    OPENAI_CLIENT = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+except: 
+    OPENAI_CLIENT = None
+
+try:
+    import google.generativeai as genai
+    if os.getenv("GEMINI_API_KEY"):
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+except: pass
+
+# --- إعداد العملاء ---
+class LLMProvider:
+    def __init__(self):
+        self.models = {
+            "gpt-4o": {"type": "openai", "model": "gpt-4o", "client": OPENAI_CLIENT},
+            "gpt-3.5": {"type": "openai", "model": "gpt-3.5-turbo", "client": OPENAI_CLIENT},
+            "deepseek": {"type": "openai_compat", "base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
+            "grok": {"type": "openai_compat", "base_url": "https://api.x.ai/v1", "model": "grok-beta"},
+            "gemini": {"type": "gemini", "model": "gemini-1.5-flash"},
+            "zai": {"type": "openai_compat", "base_url": "https://api.z.ai/v1", "model": "zai-chat"}
+        }
+
+    async def _get_client(self, model_key):
+        config = self.models.get(model_key)
+        if not config: return None, None
+
+        if config["type"] in ["openai", "openai_compat"]:
+            if config.get("client"): 
+                return config["client"], config["model"]
+            else:
+                # محاولة إنشاء Client للمفاتيح الخارجية
+                key = os.getenv(f"{model_key.upper()}_API_KEY")
+                if key:
+                    try:
+                        client = AsyncOpenAI(api_key=key, base_url=config.get("base_url"))
+                        return client, config["model"]
+                    except: pass
+        return None, None
+
+    async def generate_text(self, prompt, model_preference=["gemini", "gpt-4o", "deepseek", "grok"]):
+        """يختار أفضل موديل متاح للرد النصي"""
+        
+        for model_name in model_preference:
+            try:
+                if model_name == "gemini":
+                    key = os.getenv("GEMINI_API_KEY")
+                    if key:
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        # تشغيل المكالمة المتزامنة في خيط منفصل (مهم جداً)
+                        res = await asyncio.to_thread(model.generate_content, prompt)
+                        return res.text
+                
+                else:
+                    # DeepSeek, Grok, OpenAI, Z.ai
+                    client, model_id = await self._get_client(model_name)
+                    if client:
+                        res = await client.chat.completions.create(
+                            model=model_id,
+                            messages=[{"role": "user", "content": prompt}]
+                        )
+                        return res.choices[0].message.content
+            except Exception as e:
+                logger.warning(f"Model {model_name} failed: {e}")
+                continue
+        
+        return "⚠️ لم أتمكن من الاتصال بأي نموذج ذكي. تأكد من مفاتيح API."
+
+    async def analyze_image(self, image_base64, prompt, model_preference=["gemini", "gpt-4o"]):
+        """يختار أفضل موديل للرؤية"""
+        
+        for model_name in model_preference:
+            try:
+                if model_name == "gemini":
+                    key = os.getenv("GEMINI_API_KEY")
+                    if key:
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        res = await asyncio.to_thread(
+                            model.generate_content,
+                            [prompt, {"mime_type": "image/jpeg", "data": base64.b64decode(image_base64)}]
+                        )
+                        return res.text
+                
+                elif model_name == "gpt-4o":
+                    client, model_id = await self._get_client("gpt-4o")
+                    if client:
+                        res = await client.chat.completions.create(
+                            model="gpt-4o",
+                            messages=[{
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": prompt},
+                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+                                ]
+                            }]
+                        )
+                        return res.choices[0].message.content
+            except Exception as e:
+                logger.warning(f"Vision Model {model_name} failed: {e}")
+                continue
+        
+        return "⚠️ لم أتمكن من تحليل الصورة."
+
+# تهيئة الـ Provider العام
+llm = LLMProvider()
+7. ملف classifier.py
+python
+import re
+
+def classify_request(text=None, file_bytes=None, file_type=None):
+    if file_bytes and file_type:
+        if "image" in file_type:
+            return {"task": "image_analysis", "domain": "site"}
+        if "pdf" in file_type:
+            return {"task": "pdf_analysis", "domain": "office"}
+
+    if not text:
+        return {"task": "general_chat", "domain": "general"}
+
+    t = text.lower()
+
+    # أدوات الموقع
+    if "تشك ليست" in t or "checklist" in t or "استلام" in t:
+        return {"task": "checklist_tool", "domain": "site"}
+    if "تقرير موقع" in t or "تقرير يومي" in t:
+        return {"task": "site_report", "domain": "site"}
+
+    # الحصر
+    if "حصر" in t or "كمية" in t or "حديد" in t or "خرسانة" in t or "بلوك" in t or "أسمنت" in t or "رمل" in t or "سن" in t:
+        return {"task": "boq_tool", "domain": "boq"}
+
+    # التصميم
+    if "بلاطة" in t or "سقف" in t:
+        return {"task": "slab_tool", "domain": "design"}
+    if "عمود" in t:
+        return {"task": "column_tool", "domain": "design"}
+    if "كمرة" in t or "تحليل كمرة" in t:
+        return {"task": "beam_tool", "domain": "design"}
+    if "أساس" in t or "قاعدة" in t:
+        return {"task": "foundation_tool", "domain": "design"}
+    if "جدار استنادي" in t:
+        return {"task": "retaining_wall_tool", "domain": "design"}
+    if "سلم" in t:
+        return {"task": "stair_tool", "domain": "design"}
+
+    # استدعاء الذكاء الاصطناعي العام
+    if "اسأل الذكاء" in t or "openai" in t or "ai" in t:
+        return {"task": "ask_ai", "domain": "ai"}
+
+    return {"task": "general_chat", "domain": "general"}
+8. ملف ai_integration.py
+(إذا كان منفصلاً؛ لاحظ أن الكود الأصلي يحتوي على هذا الملف ولكن قد يكون مكرراً مع llm_provider. سنتركه كما هو مع إضافة الاستيرادات اللازمة)
+
+python
+import os
+import base64
+import logging
+from dotenv import load_dotenv
+import cv2
+import numpy as np
+
+# OpenAI Setup
+load_dotenv()
+logger = logging.getLogger("ai_integration")
+
+try:
+    from openai import OpenAI
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    OPENAI_ENABLED = True
+except:
+    OPENAI_ENABLED = False
+    logger.warning("OpenAI Key not found. AI features disabled.")
+
+# YOLO Setup
+YOLO_MODEL = None
+try:
+    from ultralytics import YOLO
+    if os.path.exists("models/yolov8n.pt"):
+        YOLO_MODEL = YOLO("models/yolov8n.pt")
+except:
+    pass
+
+def analyze_image_openai(image_base64, prompt):
+    """تحليل صورة باستخدام GPT-4o"""
+    if not OPENAI_ENABLED: return "AI Service not configured."
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o", # النموذج اللي بيشوف صور
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+                    ],
+                }
+            ],
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Error analyzing image: {str(e)}"
+
+def detect_objects_yolo(image_bytes):
+    """اكتشاف العناصر في الصورة باستخدام YOLO"""
+    if not YOLO_MODEL: return []
+    
+    # تحويل الصورة لـ numpy array
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    results = YOLO_MODEL(img)
+    detections = []
+    for r in results:
+        for box in r.boxes:
+            cls_id = int(box.cls[0])
+            label = YOLO_MODEL.names[cls_id]
+            conf = float(box.conf[0])
+            detections.append({"label": label, "confidence": conf})
+            
+    return detections
+
+def ask_openai(prompt, context=None):
+    if not OPENAI_ENABLED: return "AI Service unavailable."
+    try:
+        msgs = [{"role": "system", "content": "You are Blue, an expert engineering assistant."}]
+        if context: msgs.append({"role": "system", "content": f"Context: {context}"})
+        msgs.append({"role": "user", "content": prompt})
+        
+        res = client.chat.completions.create(model="gpt-4o-mini", messages=msgs)
+        return res.choices[0].message.content
+    except Exception as e:
+        return str(e)
+9. ملف rules_engine.py
+python
+import logging
+logger = logging.getLogger("rules_engine")
+
+def check_structural_safety(results: dict):
+    element_type = results.get("type", "beam")
+
+    if element_type == "beam":
+        return check_beam_safety(results)
+    elif element_type == "slab":
+        return check_slab_safety(results)
+
+    return {"is_safe": True, "warnings": [], "suggestions": []}
+
+def check_beam_safety(results: dict):
+    warnings = []
+    suggestions = []
+    is_safe = True
+
+    steel_ratio = results.get("steel_ratio_percent", 0)
+    depth = results.get("depth_mm", 0)
+    length = results.get("length_m", 0)
+
+    if steel_ratio > 2.5:
+        warnings.append(f"⚠️ تحذير: نسبة التسليح عالية جداً ({steel_ratio}%)، قد تحدث تشققات.")
+        suggestions.append("💰 اقتراح: زيادة عمق الكمرة لتقليل نسبة الحديد.")
+        is_safe = False
+    elif steel_ratio < 0.2:
+        warnings.append("⚠️ تحذير: نسبة التسليح منخفضة جداً.")
+        suggestions.append("💡 اقتراح: مراجعة الحسابات أو إضافة حديد إضافي.")
+
+    # فحص عمق الكمرة
+    if length > 0 and depth > 0:
+        depth_span_ratio = depth / (length * 1000)
+        if depth_span_ratio < 1/15:
+            warnings.append("⚠️ الكمرة نحيفة جداً (نسبة العمق/الطول صغيرة).")
+            suggestions.append("📏 اقتراح: زيادة العمق لتحسين المقاومة.")
+            is_safe = False
+
+    return {"is_safe": is_safe, "warnings": warnings, "suggestions": suggestions}
+
+def check_slab_safety(results: dict):
+    return {"is_safe": True, "warnings": [], "suggestions": []}
+10. ملف pdf_generator.py
+python
+import os
+import io
+import logging
+import base64
+import json
+import arabic_reshaper
+from bidi.algorithm import get_display
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.units import cm
+
+from database import SessionLocal, Project, Analysis, BOQItem, Defect, UploadedFile
+
+logger = logging.getLogger("pdf_generator")
+
+# تحميل الخط العربي
+FONT_PATH = "fonts/Amiri-Regular.ttf"
+FONT_NAME = "Amiri"
+try:
+    if os.path.exists(FONT_PATH):
+        pdfmetrics.registerFont(TTFont(FONT_NAME, FONT_PATH))
+    else:
+        logger.warning("Font file not found, falling back to Helvetica.")
+        FONT_NAME = "Helvetica"
+except Exception as e:
+    logger.error(f"Error loading font: {e}")
+    FONT_NAME = "Helvetica"
+
+def draw_arabic_text(c, text, x, y, font_size=12):
+    """مساعد لرسم النصوص العربية بشكل صحيح"""
+    try:
+        reshaped_text = arabic_reshaper.reshape(text)
+        bidi_text = get_display(reshaped_text)
+        c.setFont(FONT_NAME, font_size)
+        c.drawString(x, y, bidi_text)
+    except:
+        c.setFont("Helvetica", font_size)
+        c.drawString(x, y, text)
+
+def generate_project_report(project_id):
+    db = SessionLocal()
+    try:
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project: return None
+
+        analyses = db.query(Analysis).filter(Analysis.project_id == project_id).all()
+        boqs = db.query(BOQItem).filter(BOQItem.project_id == project_id).all()
+        defects = db.query(Defect).filter(Defect.project_id == project_id).all()
+
+        filename = f"report_{project_id}.pdf"
+        c = canvas.Canvas(filename, pagesize=A4)
+        w, h = A4
+
+        # 1. العنوان
+        c.setFont(FONT_NAME, 24)
+        draw_arabic_text(c, f"تقرير مشروع: {project.name}", 50, h - 50, 24)
+        
+        c.setFont(FONT_NAME, 12)
+        draw_arabic_text(c, f"الموقع: {project.location}", 50, h - 80, 12)
+        
+        # خط فاصل
+        c.line(50, h - 90, w - 50, h - 90)
+
+        y = h - 120
+
+        # 2. قسم التحليلات
+        draw_arabic_text(c, "التحليلات الهندسية", 50, y, 16)
+        y -= 30
+
+        for ana in analyses:
+            if y < 100:
+                c.showPage()
+                y = h - 50
+
+            # اسم المهمة
+            draw_arabic_text(c, f"- مهمة: {ana.task_type}", 50, y, 12)
+            y -= 20
+            
+            # محتوى النتيجة (نص مختصر)
+            res_data = ana.result_json.get("results", {}) if ana.result_json else {}
+            text_content = res_data.get("📐 النتائج", "") or res_data.get("📄 تحليل الملف", "")
+            
+            if text_content:
+                # نقطع النص عشان ميطولش
+                short_text = str(text_content).replace("**", "")[:100] 
+                draw_arabic_text(c, short_text, 70, y, 10)
+                y -= 20
+            
+            # صورة الرسم (لو موجودة)
+            img_data = res_data.get("image_data")
+            if img_data:
+                try:
+                    img_bytes = base64.b64decode(img_data)
+                    img = ImageReader(io.BytesIO(img_bytes))
+                    c.drawImage(img, 50, y - 120, width=150, height=100, preserveAspectRatio=True)
+                    y -= 140
+                except: pass
+            
+            y -= 20
+
+        # 3. قسم العيوب
+        if y < 150:
+            c.showPage()
+            y = h - 50
+        y -= 20
+        draw_arabic_text(c, "العيوب المسجلة", 50, y, 16)
+        y -= 30
+        
+        for defect in defects:
+            if y < 100:
+                c.showPage()
+                y = h - 50
+            line = f"- {defect.description} | {defect.severity} | {defect.status}"
+            draw_arabic_text(c, line, 50, y, 10)
+            y -= 20
+            
+            # إذا كان للعيب صورة، نحاول إدراجها (اختياري)
+            if defect.image_id:
+                img_file = db.query(UploadedFile).filter(UploadedFile.id == defect.image_id).first()
+                if img_file and os.path.exists(img_file.file_path):
+                    try:
+                        c.drawImage(img_file.file_path, 50, y-80, width=100, height=80, preserveAspectRatio=True)
+                        y -= 100
+                    except: pass
+        y -= 20
+
+        # 4. قسم الكميات
+        if y < 150:
+            c.showPage()
+            y = h - 50
+
+        y -= 20
+        draw_arabic_text(c, "جدول الكميات (BOQ)", 50, y, 16)
+        y -= 30
+        
+        total_cost = 0
+        for item in boqs:
+            price = item.total_price or 0
+            total_cost += price
+            line = f"{item.description} | {item.quantity} {item.unit} | {price} جنيه"
+            draw_arabic_text(c, line, 50, y, 10)
+            y -= 20
+            
+        # الإجمالي
+        y -= 10
+        c.setFont(FONT_NAME, 14)
+        draw_arabic_text(c, f"الإجمالي التقديري: {total_cost} جنيه", 50, y, 14)
+
+        c.save()
+        
+        with open(filename, "rb") as f:
+            pdf_bytes = f.read()
+        os.remove(filename)
+        return pdf_bytes
+
+    except Exception as e:
+        logger.error(f"PDF Gen Error: {e}")
+        return None
+    finally:
+        db.close()
+11. ملف واجهة المستخدم اخر اكواد للتطبيق.txt (Streamlit)
+هذا هو الملف الأكبر، وسأقدمه كاملاً مع جميع التعديلات المذكورة سابقاً. يُرجى نسخ المحتوى بالكامل واستبدال الملف الأصلي به.
+
+python
+"""
+BluePrint Engineering Consultancy - AI-Powered Engineering OS
+واجهة المستخدم الرئيسية (Streamlit) - تصميم عصري ومتطور
+"""
+
+import streamlit as st
+import requests
+import base64
+import json
+import pandas as pd
+import plotly.express as px
+from datetime import datetime
+import time
+import os
+
+# إعدادات الصفحة
+st.set_page_config(
+    page_title="BluePrint Engineering",
+    page_icon="🪄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ثوابت
+BACKEND = "http://127.0.0.1:8000"
+
+# تهيئة session state
+if "msgs" not in st.session_state:
+    st.session_state.msgs = []
+if "selected_project" not in st.session_state:
+    st.session_state.selected_project = None
+if "language" not in st.session_state:
+    st.session_state.language = "ar"  # ar / en
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+
+# دوال مساعدة
+def switch_lang():
+    st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
+    st.rerun()
+
+def _(text_ar, text_en):
+    """ترجمة بسيطة"""
+    return text_ar if st.session_state.language == "ar" else text_en
+
+# CSS مخصص لتحسين المظهر
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Cairo', sans-serif;
+    }
+    
+    /* خلفية الصفحة الرئيسية */
+    .stApp {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+    
+    /* ترويسة المشروع */
+    .project-header {
+        background: linear-gradient(90deg, #0b2b4f 0%, #1b4f8b 100%);
+        padding: 1.8rem 2rem;
+        border-radius: 20px;
+        color: white;
+        margin-bottom: 2rem;
+        box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        border: 1px solid rgba(255,255,255,0.2);
+        backdrop-filter: blur(5px);
+    }
+    
+    .project-header h1 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    /* بطاقات الإحصائيات */
+    .metric-card {
+        background: rgba(255,255,255,0.9);
+        backdrop-filter: blur(10px);
+        padding: 1.8rem 1rem;
+        border-radius: 25px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.5);
+        transition: transform 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+    }
+    
+    .metric-card h3 {
+        color: #2c3e50;
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    
+    .metric-card .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #0b2b4f;
+        line-height: 1.2;
+    }
+    
+    /* فقاعات المحادثة */
+    .chat-message {
+        padding: 1rem 1.5rem;
+        border-radius: 25px;
+        margin-bottom: 1rem;
+        max-width: 80%;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .user-message {
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
+        color: white;
+        margin-left: auto;
+        border-bottom-right-radius: 5px;
+    }
+    
+    .assistant-message {
+        background: white;
+        color: #1e293b;
+        margin-right: auto;
+        border-bottom-left-radius: 5px;
+        border-left: 5px solid #0b2b4f;
+    }
+    
+    .assistant-message::before {
+        content: "🪄 Blue";
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #0b2b4f;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* أزرار مخصصة */
+    .stButton button {
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
+        color: white;
+        border: none;
+        border-radius: 30px;
+        padding: 0.6rem 2rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(11,43,79,0.3);
+    }
+    
+    .stButton button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 20px rgba(11,43,79,0.4);
+    }
+    
+    /* مربعات التحميل */
+    .upload-area {
+        border: 2px dashed #0b2b4f;
+        border-radius: 20px;
+        padding: 2rem;
+        text-align: center;
+        background: rgba(255,255,255,0.7);
+        backdrop-filter: blur(5px);
+        transition: all 0.3s ease;
+    }
+    
+    .upload-area:hover {
+        background: rgba(255,255,255,0.9);
+        border-color: #1b4f8b;
+    }
+    
+    /* تبويبات جميلة */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background: rgba(255,255,255,0.5);
+        backdrop-filter: blur(10px);
+        padding: 0.5rem;
+        border-radius: 40px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 30px;
+        padding: 0.5rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
+        color: white !important;
+    }
+    
+    /* شريط جانبي */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0b2b4f 0%, #0a1e33 100%);
+        color: white;
+    }
+    
+    [data-testid="stSidebar"] .sidebar-content {
+        color: white;
+    }
+    
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        color: white !important;
+    }
+    
+    /* حقول الإدخال */
+    .stTextInput input, .stNumberInput input, .stSelectbox select {
+        border-radius: 30px !important;
+        border: 2px solid #e2e8f0;
+        padding: 0.8rem 1.5rem !important;
+        font-family: 'Cairo', sans-serif;
+    }
+    
+    .stTextInput input:focus, .stNumberInput input:focus {
+        border-color: #0b2b4f !important;
+        box-shadow: 0 0 0 3px rgba(11,43,79,0.1) !important;
+    }
+    
+    /* تحسين التجاوب مع الجوال */
+    @media (max-width: 768px) {
+        .chat-message {
+            max-width: 90%;
+        }
+        .project-header h1 {
+            font-size: 1.8rem;
+        }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# تطبيق الوضع الليلي
+if st.session_state.dark_mode:
+    st.markdown("""
+    <style>
+        .stApp {
+            background: #1e1e1e;
+            color: #ffffff;
+        }
+        .metric-card {
+            background: #2d2d2d;
+            color: #ffffff;
+        }
+        .metric-card h3 {
+            color: #cccccc;
+        }
+        .metric-card .metric-value {
+            color: #ffffff;
+        }
+        .assistant-message {
+            background: #2d2d2d;
+            color: #ffffff;
+            border-left: 5px solid #4a90e2;
+        }
+        .stTextInput input, .stNumberInput input, .stSelectbox select {
+            background: #3d3d3d;
+            color: #ffffff;
+            border-color: #555;
+        }
+        /* يمكن إضافة المزيد من التخصيصات */
+    </style>
+    """, unsafe_allow_html=True)
+
+# الشريط الجانبي
+with st.sidebar:
+    # الشعار والاسم
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        # محاولة تحميل شعار محلي، وإلا استخدم أيقونة
+        if os.path.exists("logo.png"):
+            st.image("logo.png", width=60)
+        else:
+            st.markdown("🪄", unsafe_allow_html=True)  # أيقونة بديلة
+    with col2:
+        st.markdown("## BluePrint")
+        st.markdown("##### Engineering Consultancy")
+    
+    st.markdown("---")
+    
+    # زر تبديل اللغة
+    st.button(
+        "🇺🇸 English" if st.session_state.language == "ar" else "🇸🇦 العربية",
+        on_click=switch_lang,
+        use_container_width=True
+    )
+    
+    # ---------- إضافة جديدة: الوضع الليلي ----------
+    if st.button(_("🌙 الوضع الليلي", "🌙 Dark Mode") if not st.session_state.dark_mode else _("☀️ الوضع العادي", "☀️ Light Mode")):
+        st.session_state.dark_mode = not st.session_state.dark_mode
+        st.rerun()
+    # ------------------------------------------------
+    
+    st.markdown("---")
+    
+    # إنشاء مشروع جديد
+    st.markdown(f"### {_('📁 مشروع جديد', '📁 New Project')}")
+    with st.form("new_project", clear_on_submit=True):
+        name = st.text_input(_("اسم المشروع", "Project Name"), placeholder=_("مثال: برج الأندلس", "Example: Andalusia Tower"))
+        location = st.text_input(_("الموقع", "Location"), value="Cairo")
+        if st.form_submit_button(_("🚀 إنشاء", "🚀 Create"), use_container_width=True):
+            if name:
+                r = requests.post(f"{BACKEND}/create_project", params={"name": name, "location": location})
+                if r.ok:
+                    st.success(_("✅ تم إنشاء المشروع!", "✅ Project created!"))
+                    time.sleep(1)
+                    st.rerun()
+    
+    st.markdown("---")
+    
+    # اختيار مشروع موجود
+    st.markdown(f"### {_('📂 المشاريع', '📂 Projects')}")
+    try:
+        projs = requests.get(f"{BACKEND}/projects").json()
+        if projs:
+            proj_options = {f"{p['id']} - {p['name']} ({p['location']})": p['id'] for p in projs}
+            selected_label = st.selectbox(
+                _("اختر مشروع", "Select Project"),
+                options=list(proj_options.keys())
+            )
+            if selected_label:
+                st.session_state.selected_project = proj_options[selected_label]
+                # جلب بيانات المشروع المحدد
+                try:
+                    project_data = requests.get(f"{BACKEND}/project_data/{st.session_state.selected_project}").json()
+                except:
+                    project_data = {}
+        else:
+            st.info(_("✨ لا توجد مشاريع بعد، أنشئ أول مشروع", "✨ No projects yet, create your first project"))
+    except Exception as e:
+        st.error(_("🔌 لا يمكن الاتصال بالخادم", "🔌 Cannot connect to server"))
+        st.stop()
+    
+    if st.session_state.selected_project:
+        st.markdown("---")
+        st.markdown(f"### {_('⚙️ الإجراءات', '⚙️ Actions')}")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(_("📄 تقرير PDF", "📄 PDF Report"), use_container_width=True):
+                st.markdown(f"[{_('⬇️ تحميل', '⬇️ Download')}]({BACKEND}/export_pdf/{st.session_state.selected_project})")
+        with col2:
+            if st.button(_("🗑️ حذف", "🗑️ Delete"), use_container_width=True):
+                if st.session_state.selected_project:
+                    r = requests.delete(f"{BACKEND}/project/{st.session_state.selected_project}")
+                    if r.ok:
+                        st.success(_("✅ تم الحذف", "✅ Deleted"))
+                        st.session_state.selected_project = None
+                        st.rerun()
+        
+        # ---------- إضافة جديدة: إعدادات المشروع ----------
+        with st.expander(_("⚙️ إعدادات المشروع", "⚙️ Project Settings")):
+            # جلب الإعدادات الحالية
+            try:
+                settings_resp = requests.get(f"{BACKEND}/project_settings/{st.session_state.selected_project}")
+                if settings_resp.ok:
+                    settings = settings_resp.json()
+                    conc_price = settings.get("concrete_price", 1000.0)
+                    steel_price = settings.get("steel_price", 35000.0)
+                    pref_model = settings.get("preferred_ai_model", "gemini")
+                else:
+                    conc_price, steel_price, pref_model = 1000.0, 35000.0, "gemini"
+            except:
+                conc_price, steel_price, pref_model = 1000.0, 35000.0, "gemini"
+
+            with st.form("project_settings_form"):
+                new_conc = st.number_input(_("سعر الخرسانة (جنيه/م³)", "Concrete price (EGP/m³)"), value=conc_price, step=50.0)
+                new_steel = st.number_input(_("سعر الحديد (جنيه/طن)", "Steel price (EGP/ton)"), value=steel_price, step=500.0)
+                model_options = ["gemini", "gpt-4o", "deepseek", "grok"]
+                new_model = st.selectbox(_("النموذج المفضل", "Preferred AI model"), model_options, index=model_options.index(pref_model) if pref_model in model_options else 0)
+                if st.form_submit_button(_("💾 حفظ الإعدادات", "💾 Save Settings")):
+                    try:
+                        r = requests.post(f"{BACKEND}/project_settings/{st.session_state.selected_project}", 
+                                           params={"concrete_price": new_conc, "steel_price": new_steel, "preferred_ai_model": new_model})
+                        if r.ok:
+                            st.success(_("✅ تم الحفظ", "✅ Saved"))
+                    except:
+                        st.error(_("❌ فشل الاتصال", "❌ Connection failed"))
+        # -----------------------------------------------------
+
+# المحتوى الرئيسي
+if not st.session_state.selected_project:
+    # شاشة الترحيب
+    st.markdown("""
+    <div style="text-align: center; padding: 4rem 2rem;">
+        <h1 style="font-size: 4rem; color: #0b2b4f;">🪄 BluePrint</h1>
+        <h2 style="color: #2c3e50; font-weight: 400;">Engineering Consultancy</h2>
+        <p style="font-size: 1.2rem; color: #4a5568; margin-top: 2rem;">نظام تشغيل هندسي ذكي يعمل بالذكاء الاصطناعي</p>
+        <div style="margin-top: 3rem;">
+            <p style="color: #718096;">قم بإنشاء مشروع جديد أو اختيار مشروع من القائمة الجانبية للبدء</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+# جلب بيانات المشروع (محدث)
+project_id = st.session_state.selected_project
+try:
+    data = requests.get(f"{BACKEND}/project_data/{project_id}").json()
+    if "error" in data:
+        st.error(data["error"])
+        st.stop()
+except:
+    st.error(_("❌ فشل في تحميل بيانات المشروع", "❌ Failed to load project data"))
+    st.stop()
+
+# عنوان المشروع مع تصميم جذاب
+st.markdown(f"""
+<div class="project-header">
+    <h1>🏗️ {data['project_info']['name']}</h1>
+    <p style="font-size: 1.2rem; opacity: 0.9;">
+        📍 {data['project_info']['location']} | 
+        🕒 {_('آخر تحديث', 'Last updated')}: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+# تبويبات الواجهة
+tab_names = [_("📊 لوحة المعلومات", "📊 Dashboard"),
+             _("💬 المحادثة مع Blue", "💬 Chat with Blue"),
+             _("📦 الحصر (BOQ)", "📦 BOQ"),
+             _("🔍 العيوب", "🔍 Defects"),
+             _("📋 الأرشيف", "📋 Archive"),
+             _("📚 قاعدة معرفية", "📚 Knowledge Base")]  # إضافة تبويب جديد
+tabs = st.tabs(tab_names)
+
+# ========== لوحة المعلومات (Dashboard) ==========
+with tabs[0]:
+    st.markdown(f"## {_('📈 نظرة عامة على المشروع', '📈 Project Overview')}")
+    
+    # إحصائيات سريعة
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>{_('📊 تحليلات', '📊 Analyses')}</h3>
+            <div class="metric-value">{len(data.get('timeline', []))}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>{_('📎 ملفات', '📎 Files')}</h3>
+            <div class="metric-value">{data.get('files_count', 0)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        total_cost = data.get('boq', {}).get('total_cost', 0)
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>{_('💰 التكلفة', '💰 Cost')}</h3>
+            <div class="metric-value">{total_cost:,.0f} {_('جنيه', 'EGP')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
+        defects_count = len(data.get('defects', []))
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>{_('⚠️ عيوب', '⚠️ Defects')}</h3>
+            <div class="metric-value">{defects_count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # رسم بياني لتوزيع التكاليف
+    if data.get('boq', {}).get('items'):
+        df = pd.DataFrame(data['boq']['items'])
+        fig = px.bar(df, x='desc', y='price', 
+                     title=_('تكلفة بنود الحصر', 'BOQ Items Cost'),
+                     labels={'desc': _('البند', 'Item'), 'price': _('السعر (جنيه)', 'Price (EGP)')},
+                     color_discrete_sequence=['#0b2b4f'])
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font_family='Cairo',
+            title_font_size=20,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info(_("📉 لا توجد بيانات حصر كافية لإنشاء رسم بياني", "📉 No BOQ data to display chart"))
+
+# ========== المحادثة مع Blue (Chat) ==========
+with tabs[1]:
+    st.markdown(f"## {_('💬 التحدث مع Blue - مساعدك الهندسي الذكي', '💬 Chat with Blue - Your AI Engineering Assistant')}")
+    
+    # عرض سجل المحادثة
+    chat_container = st.container()
+    with chat_container:
+        for msg in st.session_state.msgs:
+            role_class = "user-message" if msg["role"] == "user" else "assistant-message"
+            with st.chat_message(msg["role"]):
+                st.markdown(f'<div class="chat-message {role_class}">{msg["content"]}</div>', unsafe_allow_html=True)
+    
+    # منطقة الإدخال ورفع الملفات
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        prompt = st.chat_input(_("اكتب طلبك هنا... (مثال: صمم كمرة طول 5 متر وحمل 2 طن)", "Type your request here... (e.g., design a beam 5m span, load 2 tons)"))
+    with col2:
+        with st.expander(_("📎 رفع ملفات", "📎 Upload files")):
+            uploaded_files = st.file_uploader(
+                _("اختر ملفات", "Choose files"),
+                type=["jpg", "png", "jpeg", "pdf", "dwg"],
+                accept_multiple_files=True,
+                label_visibility="collapsed"
+            )
+            if uploaded_files:
+                st.success(f"✅ {len(uploaded_files)} {_('ملف', 'file(s)')}")
+    
+    if prompt or uploaded_files:
+        # إضافة رسالة المستخدم
+        if prompt:
+            st.session_state.msgs.append({"role": "user", "content": prompt})
+        
+        # معالجة كل ملف مرفوع
+        for uploaded_file in (uploaded_files or []):
+            with st.spinner(_("🪄 Blue يفكر...", "🪄 Blue is thinking...")):
+                files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
+                data_payload = {
+                    "message": prompt or "",
+                    "project_id": project_id,
+                    "history": json.dumps(st.session_state.msgs)
+                }
+                try:
+                    r = requests.post(f"{BACKEND}/process", data=data_payload, files=files, timeout=60)
+                    
+                    if r.ok:
+                        res = r.json()
+                        ans_text = ""
+                        
+                        # عرض نتائج المساعد
+                        results = res.get("results", {})
+                        for k, v in results.items():
+                            if k == "image_data":
+                                st.image(base64.b64decode(v), caption=_("🖼️ الرسم التنفيذي", "🖼️ Design Drawing"), use_container_width=True)
+                            elif k == "dxf_data":
+                                st.download_button(
+                                    label=_("⬇️ تحميل ملف CAD (DXF)", "⬇️ Download CAD (DXF)"),
+                                    data=base64.b64decode(v),
+                                    file_name="design.dxf",
+                                    mime="application/dxf"
+                                )
+                            elif k in ["checklist_data", "boq_item"]:
+                                pass
+                            elif "تحذير" in k or "warning" in k.lower():
+                                st.warning(v)
+                            else:
+                                st.markdown(f"**{k}**")
+                                st.markdown(v)
+                            
+                            if isinstance(v, str):
+                                ans_text += v + "\n"
+                        
+                        # حفظ رد المساعد
+                        if ans_text:
+                            st.session_state.msgs.append({"role": "assistant", "content": ans_text})
+                    else:
+                        st.error(_("❌ فشل في الاتصال بالخادم", "❌ Failed to connect to server"))
+                except Exception as e:
+                    st.error(f"⚠️ {_('خطأ', 'Error')}: {str(e)}")
+        
+        # إعادة تشغيل لعرض الرسائل الجديدة
+        st.rerun()
+
+# ========== الحصر (BOQ) ==========
+with tabs[2]:
+    st.subheader(_("📋 جدول الكميات والتكاليف", "📋 Bill of Quantities"))
+    
+    boq_items = data.get('boq', {}).get('items', [])
+    if boq_items:
+        df_boq = pd.DataFrame(boq_items)
+        st.dataframe(
+            df_boq,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "desc": _("الوصف", "Description"),
+                "unit": _("الوحدة", "Unit"),
+                "qty": _("الكمية", "Quantity"),
+                "price": _("السعر (جنيه)", "Price (EGP)")
+            }
+        )
+        st.markdown(f"### 💰 {_('الإجمالي التقديري', 'Estimated Total')}: **{data['boq']['total_cost']:,.2f} {_('جنيه', 'EGP')}**")
+        
+        # ---------- إضافة جديدة: زر تصدير Excel ----------
+        col_exp1, col_exp2 = st.columns([1, 5])
+        with col_exp1:
+            if st.button(_("📥 تصدير Excel", "📥 Export Excel")):
+                try:
+                    excel_url = f"{BACKEND}/export_boq/{st.session_state.selected_project}"
+                    st.markdown(f'<a href="{excel_url}" target="_blank">⬇️ {_("تحميل", "Download")}</a>', unsafe_allow_html=True)
+                except:
+                    st.error(_("❌ فشل", "❌ Failed"))
+        # ------------------------------------------------
+        
+        # ---------- إضافة جديدة: عرض البنود مع أزرار حذف ----------
+        with st.expander(_("🛠 إدارة البنود (حذف)", "🛠 Manage Items (Delete)")):
+            for item in boq_items:
+                cols = st.columns([4, 1, 1, 1])
+                with cols[0]:
+                    st.write(f"**{item['desc']}**")
+                with cols[1]:
+                    st.write(f"{item['qty']} {item['unit']}")
+                with cols[2]:
+                    st.write(f"{item['price']} جنيه")
+                with cols[3]:
+                    if st.button(_("🗑️", "🗑️"), key=f"del_boq_{item['id']}"):
+                        try:
+                            r = requests.delete(f"{BACKEND}/boq/{item['id']}")
+                            if r.ok:
+                                st.success(_("✅ تم الحذف", "✅ Deleted"))
+                                st.rerun()
+                        except:
+                            st.error(_("❌ فشل", "❌ Failed"))
+        # ---------------------------------------------------------
+    else:
+        st.info(_("📭 لا توجد كميات محصورة بعد.", "📭 No BOQ items yet."))
+    
+    # إضافة بند يدوي
+    with st.expander(_("➕ إضافة بند حصر يدوي", "➕ Add Manual BOQ Item")):
+        with st.form("manual_boq"):
+            desc = st.text_input(_("الوصف", "Description"))
+            unit = st.selectbox(_("الوحدة", "Unit"), ["م3", "طن", "م2", "عدد"])
+            qty = st.number_input(_("الكمية", "Quantity"), min_value=0.0, step=0.1)
+            price = st.number_input(_("السعر الإجمالي", "Total Price"), min_value=0.0, step=100.0)
+            if st.form_submit_button(_("💾 إضافة", "💾 Add"), use_container_width=True):
+                try:
+                    r = requests.post(f"{BACKEND}/add_boq/{project_id}", params={
+                        "desc": desc, "unit": unit, "qty": qty, "price": price
+                    })
+                    if r.ok:
+                        st.success(_("✅ تمت الإضافة", "✅ Added"))
+                        st.rerun()
+                except:
+                    st.error(_("❌ فشل الاتصال", "❌ Connection failed"))
+
+# ========== العيوب ==========
+with tabs[3]:
+    st.subheader(_("🔎 إدارة العيوب", "🔎 Defects Management"))
+    
+    defects = data.get('defects', [])
+    if defects:
+        for defect in defects:
+            with st.container():
+                cols = st.columns([3, 1, 1, 1, 1])  # أضفنا عمود خامس للحذف
+                with cols[0]:
+                    st.markdown(f"**{defect['desc']}**")
+                with cols[1]:
+                    severity_color = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}.get(defect['severity'], "⚪")
+                    st.markdown(f"{severity_color} {defect['severity']}")
+                with cols[2]:
+                    status_icon = "✅" if defect['status'] == "Resolved" else "⏳"
+                    st.markdown(f"{status_icon} {defect['status']}")
+                with cols[3]:
+                    # زر تعديل - يفتح popover
+                    with st.popover(_("✏️", "✏️")):
+                        st.markdown(f"**{_('تعديل العيب', 'Edit Defect')}**")
+                        new_desc = st.text_area(_("الوصف", "Description"), value=defect['desc'], key=f"desc_{defect['id']}")
+                        new_sev = st.selectbox(_("الشدة", "Severity"), ["High", "Medium", "Low"], index=["High","Medium","Low"].index(defect['severity']), key=f"sev_{defect['id']}")
+                        new_stat = st.selectbox(_("الحالة", "Status"), ["Open", "Resolved"], index=0 if defect['status']=="Open" else 1, key=f"stat_{defect['id']}")
+                        if st.button(_("💾 حفظ", "💾 Save"), key=f"save_{defect['id']}"):
+                            try:
+                                r = requests.put(f"{BACKEND}/defect/{defect['id']}", params={"description": new_desc, "severity": new_sev, "status": new_stat})
+                                if r.ok:
+                                    st.success(_("✅ تم التحديث", "✅ Updated"))
+                                    st.rerun()
+                            except:
+                                st.error(_("❌ فشل", "❌ Failed"))
+                with cols[4]:
+                    # زر حذف
+                    if st.button(_("🗑️", "🗑️"), key=f"del_{defect['id']}"):
+                        if st.checkbox(_("تأكيد الحذف", "Confirm delete"), key=f"confirm_{defect['id']}"):
+                            try:
+                                r = requests.delete(f"{BACKEND}/defect/{defect['id']}")
+                                if r.ok:
+                                    st.success(_("✅ تم الحذف", "✅ Deleted"))
+                                    st.rerun()
+                            except:
+                                st.error(_("❌ فشل", "❌ Failed"))
+                st.markdown("---")
+    else:
+        st.info(_("✨ لا توجد عيوب مسجلة. ارفع صورة موقع للكشف عن العيوب تلقائياً!", "✨ No defects recorded. Upload a site image to detect defects automatically!"))
+
+# ========== الأرشيف ==========
+with tabs[4]:
+    st.subheader(_("📚 سجل المشروع", "📚 Project Timeline"))
+    timeline = data.get('timeline', [])
+    if timeline:
+        for item in timeline:
+            with st.expander(f"**{item.get('task')}** - {item.get('date')}"):
+                st.json(item)
+    else:
+        st.info(_("📭 لا يوجد سجل بعد.", "📭 No timeline yet."))
+
+# ========== قاعدة معرفية ==========
+with tabs[5]:
+    st.subheader(_("📚 القاعدة المعرفية الهندسية", "📚 Engineering Knowledge Base"))
+    
+    kb_options = [_("معادلات إنشائية", "Structural Formulas"),
+                  _("كودات البناء", "Building Codes"),
+                  _("نسب الخلط", "Mix Ratios"),
+                  _("أسئلة شائعة", "FAQs")]
+    choice = st.radio(_("اختر الموضوع", "Choose topic"), kb_options, horizontal=True)
+    
+    if choice == kb_options[0]:  # معادلات
+        st.markdown("""
+        ### معادلات إنشائية أساسية
+        - **عزم الانحناء للكمرة**: M = (wL²)/8 (for simply supported)
+        - **إجهاد الخرسانة**: f_c = P/A
+        - **نسبة التسليح**: ρ = A_s / (b*d)
+        - **طول التماسك**: L_d = (f_y * d_b) / (4 * τ_bd)
+        """)
+    elif choice == kb_options[1]:  # كودات
+        st.markdown("""
+        ### الكودات الشائعة
+        - **الكود المصري**: ECP 203
+        - **الكود الأمريكي**: ACI 318
+        - **الكود البريطاني**: BS 8110
+        - **الكود الأوروبي**: Eurocode 2
+        """)
+    elif choice == kb_options[2]:  # نسب الخلط
+        st.markdown("""
+        ### نسب خلط الخرسانة التقريبية (لكل متر مكعب)
+        - **خرسانة عادية**: 300 كجم أسمنت + 0.8 م³ رمل + 1.2 م³ سن + ماء
+        - **خرسانة مسلحة**: 350 كجم أسمنت + 0.6 م³ رمل + 1.2 م³ سن + ماء
+        - **خرسانة مقاومة**: 400 كجم أسمنت + 0.5 م³ رمل + 1.1 م³ سن + إضافات
+        """)
+    else:  # أسئلة شائعة
+        st.markdown("""
+        ### أسئلة شائعة
+        - **ما هو الغطاء الخرساني؟** هي المسافة بين سطح الخرسانة وحديد التسليح.
+        - **متى نستخدم كانات؟** في الكمرات والأعمدة لمقاومة القص.
+        - **ما هو الفرق بين الخرسانة العادية والمسلحة؟** المسلحة تحتوي على حديد تسليح.
+        """)
+    
+    # إمكانية البحث باستخدام الذكاء الاصطناعي
+    st.markdown("---")
+    st.markdown(_("🔍 **ابحث في القاعدة المعرفية**", "🔍 **Search Knowledge Base**"))
+    kb_query = st.text_input(_("اكتب سؤالك هنا", "Type your question here"))
+    if kb_query:
+        with st.spinner(_("Blue يبحث...", "Blue is searching...")):
+            # إرسال السؤال إلى الخادم
+            try:
+                r = requests.post(f"{BACKEND}/process", data={
+                    "message": kb_query,
+                    "project_id": project_id,
+                    "history": "[]"
+                })
+                if r.ok:
+                    res = r.json()
+                    answer = res.get("results", {}).get("💻 Blue", "لم أجد إجابة")
+                    st.success(answer)
+                else:
+                    st.error(_("❌ فشل الاتصال", "❌ Connection failed"))
+            except Exception as e:
+                st.error(f"⚠️ {str(e)}")
+ملخص الملفات المطلوبة
+database.py (نموذج قاعدة البيانات مع إضافة ProjectSettings)
+
+main.py (FastAPI endpoints مع إضافات: delete_boq, update/delete defect, project_settings, export_boq)
+
+tools.py (أدوات التصميم مع إضافة retaining_wall_analysis, stair_analysis, ودالة تحديث الأسعار)
+
+agents.py (تحديث StructuralAgent لاستخدام الأدوات الجديدة)
+
+orchestrator.py (إضافة تحديث الأسعار في بداية route_request)
+
+llm_provider.py (بدون تغيير، ولكن تأكد من وجوده)
+
+classifier.py (بدون تغيير)
+
+ai_integration.py (بدون تغيير)
+
+rules_engine.py (بدون تغيير)
+
+pdf_generator.py (إضافة قسم العيوب مع الصور)
+
+اخر اكواد للتطبيق.txt (واجهة Streamlit كاملة مع جميع الإضافات)
+
+تأكد من تثبيت الحزم المطلوبة:
+
+bash
+pip install streamlit fastapi uvicorn sqlalchemy pandas plotly requests python-dotenv openai google-generativeai pypdf ezdxf matplotlib opencv-python ultralytics reportlab arabic-reshaper python-bidi
+لاحظ أن بعض الحزم قد تحتاج إلى تثبيت إضافي حسب نظامك (مثل arabic-reshaper, bidi). يمكنك استخدام pip install arabic-reshaper python-bidi.
+
+الآن يمكنك نسخ كل ملف على حدة ولصقه في الملف المقابل. إذا واجهتك أي مشكلة، فأنا هنا للمساعدة.
+
+جميل ثبت اخر ملفات  عندك تبقي هيا الاس الي هنطور علية بعد كدا
+نحن الآن بعد أن قدمنا جميع الملفات المحدثة، يمكننا اعتبار هذه النسخة هي "الإصدار الأساسي" الذي سنبني عليه التطويرات المستقبلية. لقد أضفنا العديد من الميزات الجديدة دون المساس بالكود الأصلي، وحافظنا على هيكلية المشروع. من الآن فصاعداً، أي تطوير إضافي سيتم إضافته على هذه القاعدة.
+
+إذا كنت تريد توثيق هذه النسخة، يمكنك إنشاء مجلد جديد وحفظ جميع الملفات فيه. أو يمكنك وضع العلامة (tag) في نظام التحكم بالنسخ (Git) إذا كنت تستخدمه.
+
+الآن، أنا جاهز لأي طلبات تطوير إضافية تريدها. فقط أخبرني بالميزة الجديدة التي تريد إضافتها، وسأقوم بتزويدك بالكود الكامل والتعديلات اللازمة مع الحفاظ على كل شيء.
+
+
+
+
+
+
+
+
+
+
+
+

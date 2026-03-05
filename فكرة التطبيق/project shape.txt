@@ -1,0 +1,17 @@
+project_folder/
+│
+├── main.py                 # الخادم FastAPI (محدث)
+├── orchestrator.py         # توجيه الطلبات (محدث)
+├── classifier.py           # تصنيف الطلبات (محدث)
+├── tools.py                # الأدوات الهندسية (محدث)
+├── ai_integration.py       # جديد: التكامل مع OpenAI API وتحليل الصور
+├── pdf_generator.py        # جديد: توليد PDF متقدم باستخدام WeasyPrint
+├── database.py             # (نفسه تقريباً مع إضافة حقول جديدة)
+├── gateway.py              # واجهة Streamlit (محدثة)
+├── rules_engine.py         # (نفسه مع تحسينات بسيطة)
+├── templates/              # مجلد جديد لقوالب HTML للـ PDF
+│   └── report_template.html
+├── fonts/                  # مجلد جديد للخطوط العربية
+│   └── Amiri-Regular.ttf   # (يجب تحميله من الإنترنت)
+└── models/                 # مجلد لنماذج الذكاء الاصطناعي
+    └── yolov8n.pt          # نموذج YOLOv8 (سيتم تحميله تلقائياً)

@@ -1,0 +1,45 @@
+# إخفاء ملفات البيئة السرية
+.env
+
+# إخفاء ملفات بايثون المؤقتة
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# إخفاء ملفات البيئة الافتراضية (لو عامل venv)
+venv/
+.venv/
+env/
+
+# إخفاء ملفات إعدادات المحررات
+.vscode/
+.idea/
+.DS_Store
+
+# إخفاء ملفات الـ log والبيانات المؤقتة
+*.log
+
+knowledge_base/
+uploads/
+chroma_db/
+__pycache__/
+*.db
+*.exe
+*.pdf
+
+.env
+*.key
+secrets/
+
+knowledge_base/
+uploads/
+chroma_db/
+__pycache__/
+*.db
+*.exe
+*.pdf
+*.log
+.env
+.vscode/
+.idea/

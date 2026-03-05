@@ -1,0 +1,11 @@
+knowledge_base/
+uploads/
+chroma_db/
+__pycache__/
+*.db
+*.exe
+*.pdf
+*.log
+.env
+.vscode/
+.idea/
