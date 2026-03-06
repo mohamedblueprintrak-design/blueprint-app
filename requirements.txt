@@ -15,7 +15,6 @@ opencv-python
 ultralytics
 reportlab
 arabic-reshaper
-python-bidi
 python-jose[cryptography]
 passlib[bcrypt]
 exifread
@@ -27,3 +26,5 @@ pytest
 pytest-asyncio
 azure-identity
 azure-keyvault-secrets
+python-multipart
+python-docx
