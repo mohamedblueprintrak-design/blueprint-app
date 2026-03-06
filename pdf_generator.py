@@ -4,7 +4,7 @@ import logging
 import base64
 import json
 import arabic_reshaper
-from bidi.algorithm import get_display
+#from bidi.algorithm import get_display
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
