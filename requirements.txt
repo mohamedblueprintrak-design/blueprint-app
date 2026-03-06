@@ -11,8 +11,6 @@ google-generativeai
 pypdf
 ezdxf
 matplotlib
-opencv-python
-ultralytics
 reportlab
 arabic-reshaper
 python-jose[cryptography]
