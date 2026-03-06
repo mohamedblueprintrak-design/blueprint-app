@@ -27,7 +27,7 @@ st.set_page_config(
 st.markdown('<link rel="manifest" href="/static/manifest.json">', unsafe_allow_html=True)
 
 # ثوابت
-BACKEND = "http://127.0.0.1:8000"
+BACKEND = "https://blueprint-app-jrwp.onrender.com"
 
 # تهيئة session state
 if "msgs" not in st.session_state:
