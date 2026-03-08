@@ -35,11 +35,11 @@ pwa_html = """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
 # ثوابت
-<<<<<<< HEAD
+
 BACKEND = "https://blueprint-app-jrwp.onrender.com"
 =======
 BACKEND = "https://blueprint-app-jrwp.onrender.com"  # عدّل الرابط حسب خدمتك
->>>>>>> a59f9d4 (تحسينات واجهة PWA وإصلاحات الموبايل)
+ a59f9d4 (تحسينات واجهة PWA وإصلاحات الموبايل)
 
 # تهيئة session state
 if "msgs" not in st.session_state:
