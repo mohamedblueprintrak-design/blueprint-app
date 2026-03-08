@@ -31,3 +31,4 @@ langchain-community==0.3.20
 langchain-chroma==0.2.2
 sentence-transformers==3.4.1
 chromadb==0.6.3
+gunicorn
