@@ -1,154 +1,168 @@
 import streamlit as st
-import requests
-import json
 import pandas as pd
-import plotly.express as px
-from datetime import datetime
 import time
-import os
-import urllib.parse
+from datetime import datetime
 
-# 1. إعدادات النظام والهوية (Theme Configuration)
-st.set_page_config(
-    page_title="BluePrint | AI Engineering OS",
-    page_icon="🪄",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# 1. الإعدادات المتقدمة للهوية
+st.set_page_config(page_title="BluePrint | Premium OS", page_icon="💎", layout="wide")
 
-# 2. الواجهة الرسومية الموحدة (Integrated CSS)
+# 2. محرك الجماليات (The UI Engine) - تصميم زجاجي عصري
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap');
-    
-    html, body, [class*="css"] { font-family: 'Cairo', sans-serif; text-align: right; direction: rtl; }
-    .stApp { background-color: #f8fafc; }
-    
-    /* بطاقات بلو بيرينت الاحترافية */
-    .bp-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        padding: 1.5rem;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
-        transition: all 0.3s ease;
-        margin-bottom: 1rem;
-    }
-    .bp-card:hover { border-right: 8px solid #0ea5e9; transform: translateX(-5px); }
-    
-    /* تصميم الأزرار التفاعلية */
-    .stButton > button {
-        background: linear-gradient(90deg, #0b2b4f, #0ea5e9);
-        color: white; border-radius: 30px; border: none;
-        font-weight: 600; width: 100%; transition: 0.2s;
-    }
-    .stButton > button:hover { box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4); }
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;700&family=Inter:wght@400;600&display=swap');
 
-    /* هيدر الصفحة */
-    .bp-header { color: #0b2b4f; font-weight: 700; border-bottom: 2px solid #0ea5e9; padding-bottom: 10px; }
+    /* تحويل المتصفح بالكامل */
+    html, body, [class*="css"] { 
+        font-family: 'Cairo', sans-serif; 
+        color: #1e293b;
+        direction: rtl;
+    }
+    
+    .stApp {
+        background: radial-gradient(circle at top right, #e0f2fe, #f8fafc);
+    }
+
+    /* إخفاء شريط ستريمليت العلوي */
+    header {visibility: hidden;}
+
+    /* تصميم البطاقات الزجاجية - Glassmorphism */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 24px;
+        padding: 25px;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+        margin-bottom: 20px;
+        transition: 0.4s ease-in-out;
+    }
+    .glass-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px 0 rgba(14, 165, 233, 0.15);
+        border-right: 10px solid #0369a1;
+    }
+
+    /* الهيدر الرئيسي الفخم */
+    .hero-section {
+        background: linear-gradient(135deg, #0b213f 0%, #0077be 100%);
+        padding: 40px;
+        border-radius: 30px;
+        color: white;
+        margin-bottom: 30px;
+        box-shadow: 0 20px 40px rgba(0, 119, 190, 0.2);
+    }
+
+    /* الأزرار الهندسية */
+    .stButton > button {
+        background: linear-gradient(90deg, #0369a1, #0ea5e9);
+        color: white;
+        border-radius: 15px;
+        border: none;
+        padding: 12px 30px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        transition: 0.3s;
+    }
+    .stButton > button:hover {
+        background: #0b213f;
+        box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
+    }
+
+    /* تخصيص التبويبات لتكون كأزرار تحكم */
+    .stTabs [data-baseweb="tab-list"] {
+        background: rgba(255, 255, 255, 0.5);
+        padding: 10px;
+        border-radius: 20px;
+        gap: 20px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        border-radius: 12px;
+        background: transparent;
+        color: #64748b;
+    }
+    .stTabs [aria-selected="true"] {
+        background: #ffffff !important;
+        color: #0369a1 !important;
+        font-weight: bold;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# 3. الدوال التشغيلية (Logic & API)
-BACKEND = "https://blueprint-app-jrwp.onrender.com"
-
-if "msgs" not in st.session_state: st.session_state.msgs = []
-if "token" not in st.session_state: st.session_state.token = None
-
-def get_headers():
-    return {"Authorization": f"Bearer {st.session_state.token}"} if st.session_state.token else {}
-
-def draw_gauge(score):
-    color = "#22c55e" if score >= 70 else "#eab308" if score >= 40 else "#ef4444"
+# 3. مكونات الواجهة الذكية
+def info_card(title, value, icon, trend):
     st.markdown(f"""
-    <div style="text-align: center; background: white; padding: 20px; border-radius: 20px; border: 1px solid #e2e8f0;">
-        <p style="color: #64748b; margin:0;">حالة المشروع</p>
-        <h1 style="color: {color}; font-size: 3.5rem; margin:0;">{score}%</h1>
-        <div style="width: 100%; background: #f1f5f9; height: 12px; border-radius: 10px; margin-top: 10px;">
-            <div style="width: {score}%; background: {color}; height: 12px; border-radius: 10px;"></div>
+    <div class="glass-card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 2rem;">{icon}</span>
+            <span style="color: #10b981; font-weight: bold;">{trend} ↑</span>
         </div>
+        <h3 style="color: #64748b; font-size: 1rem; margin-top: 10px;">{title}</h3>
+        <h2 style="color: #0b213f; font-weight: 700; margin: 0;">{value}</h2>
     </div>
     """, unsafe_allow_html=True)
 
-# 4. القائمة الجانبية (Sidebar Control Center)
+# 4. بناء الهيكل (The Layout)
 with st.sidebar:
-    st.markdown("<h2 style='color: #0b2b4f;'>🪄 BluePrint OS</h2>", unsafe_allow_html=True)
-    st.caption("نظام الإدارة الهندسية الذكي")
+    st.markdown("<div style='text-align:center'><h1 style='color:#0369a1'>BluePrint</h1><p>Consultancy Gateway</p></div>", unsafe_allow_html=True)
     st.divider()
+    project = st.selectbox("📁 اختيار المشروع النشط", ["برج المنارة السكني", "مجمع الفيلات الحديثة"])
+    st.markdown("---")
+    st.write("🛠️ **أدوات سريعة**")
+    st.button("📄 تصدر تقرير PDF")
+    st.button("📉 تحديث الحصر")
 
-    if not st.session_state.token:
-        with st.form("login"):
-            u = st.text_input("اسم المستخدم")
-            p = st.text_input("كلمة المرور", type="password")
-            if st.form_submit_button("دخول"):
-                # منطق تسجيل الدخول هنا
-                st.session_state.token = "demo_token"
-                st.rerun()
-    else:
-        st.success("تم تسجيل الدخول: م. استشاري")
-        project = st.selectbox("المشروع الحالي", ["برج النخبة - رأس الخيمة", "فيلا جميرا"])
-        if st.button("🚪 خروج"):
-            st.session_state.token = None
-            st.rerun()
+# الهيدر الاحترافي
+st.markdown(f"""
+<div class="hero-section">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 style="margin:0; font-size: 2.5rem;">أهلاً بك في BluePrint OS</h1>
+            <p style="opacity: 0.9;">مشروع: {project} | حالة الموقع: نشط الآن</p>
+        </div>
+        <div style="background: rgba(255,255,255,0.2); padding: 20px; border-radius: 20px; text-align: center;">
+            <span style="font-size: 0.8rem; display: block;">صحة المشروع</span>
+            <span style="font-size: 2.2rem; font-weight: bold;">94%</span>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-# 5. الواجهة الرئيسية (The Gateway)
-if not st.session_state.token:
-    st.warning("يرجى تسجيل الدخول للوصول إلى لوحة التحكم.")
-    st.stop()
+# صف الإحصائيات الفخمة
+c1, c2, c3, c4 = st.columns(4)
+with c1: info_card("التكلفة الحالية", "1.2M AED", "💎", "12%")
+with c2: info_card("المهام المكتملة", "85/100", "✅", "5%")
+with c3: info_card("العيوب المفتوحة", "03", "🔍", "0%")
+with c4: info_card("فريق العمل", "12 مهندس", "👥", "2%")
 
-# رأس الصفحة
-st.markdown(f"<h1 class='bp-header'>لوحة تحكم: {project}</h1>", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
-# صف الإحصائيات (KPIs)
-col_g, col_1, col_2, col_3 = st.columns([1.2, 1, 1, 1])
-with col_g: draw_gauge(82)
-with col_1:
-    st.markdown("<div class='bp-card'><h5>💰 الميزانية</h5><h2>4.2M</h2><small>درهم إماراتي</small></div>", unsafe_allow_html=True)
-with col_2:
-    st.markdown("<div class='bp-card'><h5>⚠️ العيوب</h5><h2>5</h2><small>تحتاج معالجة</small></div>", unsafe_allow_html=True)
-with col_3:
-    st.markdown("<div class='bp-card'><h5>📅 الجدول الزمني</h5><h2>+12</h2><small>يوم انحراف</small></div>", unsafe_allow_html=True)
+# التبويبات (Tabs) بتصميم مودرن
+t1, t2, t3, t4 = st.tabs(["🤖 محرك ذكاء Blue", "📊 الحصر الرقمي", "🚧 متابعة التنفيذ", "⚙️ الإدارة"])
 
-# نظام التبويبات (7 Tabs)
-tabs = st.tabs(["💬 ذكاء Blue", "📦 الحصر الذكي", "🔎 إدارة العيوب", "📍 تقارير الموقع", "📚 الأكواد الهندسية", "📈 التحليلات", "⚙️ الإعدادات"])
+with t1:
+    col_chat, col_img = st.columns([2, 1])
+    with col_chat:
+        st.markdown("<div class='glass-card'><h4>💬 استشارة هندسية فورية</h4></div>", unsafe_allow_html=True)
+        if prompt := st.chat_input("اسأل عن تفاصيل الكود أو المواصفات..."):
+            with st.chat_message("user"): st.write(prompt)
+            with st.chat_message("assistant"): st.write("بناءً على مخططات المشروع والبيانات المرفوعة، يفضل البدء في صب القواعد...")
+    with col_img:
+        st.markdown("<div class='glass-card'><h4>🖼️ رؤية الموقع</h4><p style='font-size:0.8rem'>آخر صورة من الكاميرات</p></div>", unsafe_allow_html=True)
+        st.image("https://images.unsplash.com/photo-1541888946425-d81bb19480c5?auto=format&fit=crop&w=400", use_container_width=True)
 
-with tabs[0]: # Chat Interface
-    st.markdown("### 🤖 مساعدك الهندسي الذكي")
-    for m in st.session_state.msgs:
-        with st.chat_message(m["role"]): st.markdown(m["content"])
-    
-    if p := st.chat_input("اسأل Blue عن تفاصيل التصميم..."):
-        st.session_state.msgs.append({"role": "user", "content": p})
-        with st.chat_message("assistant"):
-            with st.spinner("جاري الرجوع للكود المصري والبريطاني..."):
-                time.sleep(1)
-                st.write("بناءً على المعطيات، يفضل زيادة قطر السيخ في الكانة الخارجية لضمان مقاومة القص...")
-
-with tabs[1]: # BOQ
-    st.markdown("### 📋 جدول الكميات (BOQ)")
+with t2:
+    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+    st.subheader("📋 جدول الكميات الذكي (BOQ)")
     df = pd.DataFrame({
-        "البند": ["خرسانة مسلحة", "حديد تسليح", "عزل مائي"],
-        "الكمية": [250, 45, 600],
-        "الوحدة": ["م3", "طن", "م2"],
-        "التكلفة التقديرية": [125000, 180000, 45000]
+        "البند": ["خرسانة أساسات", "حديد تسليح عالي المقاومة", "عزل بيتومين"],
+        "الكمية": [200, 35, 550],
+        "الحالة": ["مكتمل", "جاري التوريد", "مخطط"]
     })
-    st.dataframe(df, use_container_width=True)
-    if st.button("📥 تصدير إلى Excel"): st.toast("جاري التصدير...")
-
-with tabs[2]: # Defects
-    st.markdown("### 🔍 سجل العيوب والملاحظات")
-    st.error("تعشيش في العمود المحوري C2 - الطابق الأول")
-    st.info("ملاحظة: تم التوجيه باستخدام Grout عالي المقاومة.")
-
-with tabs[4]: # Engineering Codes
-    st.markdown("### 📚 القاعدة المعرفية")
-    col_c1, col_c2 = st.columns(2)
-    with col_c1:
-        st.write("✅ **الكود المصري (ECP 203)**: متاح للبحث")
-        st.write("✅ **كود بلدية رأس الخيمة**: محدث 2026")
-    with col_c2:
-        st.write("✅ **AISC Steel Manual**: متاح")
+    st.table(df)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # تذييل الصفحة
-st.divider()
-st.caption("BluePrint Gateway OS | v2.5 | Ras Al Khaimah")
+st.markdown("<div style='text-align: center; color: #94a3b8; padding: 20px;'>BluePrint Engineering OS | Powered by AI | 2026</div>", unsafe_allow_html=True)
