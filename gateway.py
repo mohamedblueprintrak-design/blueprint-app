@@ -1,7 +1,7 @@
 """
 BluePrint Engineering Consultancy - AI-Powered Engineering OS
 واجهة المستخدم الرئيسية (Streamlit) - الإصدار النهائي مع جميع التحسينات
-(Health Score, PWA, واتساب, رفع الملفات, السياق الذكي)
+(Health Score, PWA, واتساب, رفع الملفات, السياق الذكي, تحسينات الموبايل)
 """
 
 import streamlit as st
@@ -23,11 +23,23 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# إضافة رابط manifest.json يدوياً (لـ PWA)
-st.markdown('<link rel="manifest" href="/static/manifest.json">', unsafe_allow_html=True)
+# إضافة دعم PWA عبر HTML (manifest والأيقونات)
+pwa_html = """
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BluePrint">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <meta name="theme-color" content="#0b2b4f">
+"""
+st.markdown(pwa_html, unsafe_allow_html=True)
 
 # ثوابت
+<<<<<<< HEAD
 BACKEND = "https://blueprint-app-jrwp.onrender.com"
+=======
+BACKEND = "https://blueprint-app-jrwp.onrender.com"  # عدّل الرابط حسب خدمتك
+>>>>>>> a59f9d4 (تحسينات واجهة PWA وإصلاحات الموبايل)
 
 # تهيئة session state
 if "msgs" not in st.session_state:
@@ -67,7 +79,7 @@ def get_health_color(score):
     else:
         return "🔴"
 
-# CSS محسّن (عصري، مستوحى من Tailwind/Next.js)
+# CSS محسّن (عصري، متجاوب مع الموبايل)
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
@@ -87,7 +99,7 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.1);
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.2);
-        padding: 1.8rem 2rem;
+        padding: 1.5rem 2rem;
         border-radius: 1rem;
         color: white;
         margin-bottom: 2rem;
@@ -284,17 +296,23 @@ st.markdown("""
         border-color: #764ba2;
     }
     
-    /* الوضع الليلي */
-    .dark-mode .stApp {
-        background: #1a1a1a;
-    }
-    
+    /* تحسينات الموبايل */
     @media (max-width: 768px) {
         .chat-message {
             max-width: 90%;
         }
         .project-header h1 {
             font-size: 1.8rem;
+        }
+        .metric-card {
+            margin-bottom: 1rem;
+        }
+        .stButton button {
+            width: 100%;
+        }
+        [data-testid="column"] {
+            width: 100% !important;
+            flex: unset !important;
         }
     }
 </style>
@@ -333,7 +351,8 @@ if st.session_state.dark_mode:
         }
     </style>
     """, unsafe_allow_html=True)
-    # الشريط الجانبي
+
+# الشريط الجانبي
 with st.sidebar:
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -568,9 +587,35 @@ with st.sidebar:
                                 st.success(_("✅ تم الحفظ", "✅ Saved"))
                         except:
                             st.error(_("❌ فشل الاتصال", "❌ Connection failed"))
+            
+            # قسم إدارة قاعدة المعرفة (للمشرفين فقط)
+            if st.session_state.user.get('role') == 'admin':
+                with st.expander(_("📚 إدارة قاعدة المعرفة", "📚 Knowledge Base Management")):
+                    st.markdown(_("هنا يمكنك رفع ملفات PDF جديدة للكودات الهندسية.", "Here you can upload new PDF files for engineering codes."))
+                    uploaded_files = st.file_uploader(
+                        _("اختر ملفات PDF", "Choose PDF files"),
+                        type=["pdf"],
+                        accept_multiple_files=True,
+                        key="kb_uploader"
+                    )
+                    if uploaded_files and st.button(_("💾 رفع وفهرسة الملفات", "💾 Upload and Index")):
+                        # حفظ الملفات في مجلد knowledge_base
+                        import os
+                        os.makedirs("knowledge_base", exist_ok=True)
+                        for uploaded_file in uploaded_files:
+                            file_path = os.path.join("knowledge_base", uploaded_file.name)
+                            with open(file_path, "wb") as f:
+                                f.write(uploaded_file.getvalue())
+                        st.success(_("✅ تم رفع الملفات. جاري إعادة الفهرسة...", "✅ Files uploaded. Re-indexing..."))
+                        
+                        # استدعاء إعادة الفهرسة
+                        from knowledge_retriever import retriever
+                        retriever.index_pdfs()
+                        st.success(_("✅ تمت إعادة الفهرسة بنجاح", "✅ Re-indexing completed successfully"))
     else:
         st.info(_("🔐 الرجاء تسجيل الدخول أولاً", "🔐 Please login first"))
-        # المحتوى الرئيسي
+
+# المحتوى الرئيسي
 if not st.session_state.token:
     st.markdown("""
     <div style="text-align: center; padding: 4rem 2rem;">
@@ -706,7 +751,7 @@ with tabs[0]:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info(_("📉 لا توجد بيانات حصر كافية لإنشاء رسم بياني", "📉 No BOQ data to display chart"))
-        # ========== المحادثة مع Blue (مع رفع الملفات) ==========
+
 # ========== المحادثة مع Blue (مع رفع الملفات) ==========
 with tabs[1]:
     st.markdown(f"## {_('💬 التحدث مع Blue', '💬 Chat with Blue')}")
@@ -716,7 +761,7 @@ with tabs[1]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
     
-    # منطقة رفع الملفات (موجودة قبل الإدخال)
+    # منطقة رفع الملفات
     with st.expander(_("📎 رفع ملفات للتحليل", "📎 Upload files for analysis")):
         uploaded_files = st.file_uploader(
             _("اختر صور أو ملفات PDF", "Choose images or PDF files"),
@@ -747,7 +792,7 @@ with tabs[1]:
                         for f in uploaded_files:
                             files.append(("files", (f.name, f.getvalue(), f.type)))
                     else:
-                        files = None  # لا يوجد ملفات
+                        files = None
                     
                     # بيانات الطلب
                     data_payload = {
@@ -756,7 +801,6 @@ with tabs[1]:
                         "history": json.dumps(st.session_state.msgs[:-1] if prompt else st.session_state.msgs)
                     }
                     
-                    # إرسال الطلب
                     response = requests.post(
                         f"{BACKEND}/process",
                         data=data_payload,
@@ -769,7 +813,6 @@ with tabs[1]:
                         result = response.json()
                         results_dict = result.get("results", {})
                         if results_dict:
-                            # خذ أول قيمة نصية نجدها
                             first_key = list(results_dict.keys())[0]
                             first_value = results_dict[first_key]
                             reply = first_value if isinstance(first_value, str) else str(first_value)
@@ -868,7 +911,8 @@ with tabs[2]:
                             st.error(f"❌ فشل الإضافة: {r.status_code}")
                     except Exception as e:
                         st.error(f"❌ خطأ: {str(e)}")
-                        # ========== العيوب (مع زر مشاركة واتساب) ==========
+
+# ========== العيوب (مع زر مشاركة واتساب) ==========
 with tabs[3]:
     st.subheader(_("🔎 إدارة العيوب", "🔎 Defects Management"))
     
@@ -996,7 +1040,8 @@ with tabs[3]:
             st.metric(_("عالية الخطورة", "High Severity"), len([d for d in defects if d['severity'] == "High"]))
     else:
         st.info(_("✨ لا توجد عيوب مسجلة. يمكنك إضافة عيب جديد من القسم أعلاه.", "✨ No defects recorded. Add a new defect from the section above."))
-        # ========== الأرشيف ==========
+
+# ========== الأرشيف ==========
 with tabs[4]:
     st.subheader(_("📚 سجل المشروع", "📚 Project Timeline"))
     timeline = data.get('timeline', [])
