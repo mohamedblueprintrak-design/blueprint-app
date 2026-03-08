@@ -2,162 +2,154 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# 1. الإعدادات الفنية (Architecture Settings)
-st.set_page_config(page_title="BluePrint OS | Elite Gateway", layout="wide")
+# 1. إعدادات الهوية البصرية (Architectural Identity)
+st.set_page_config(page_title="BluePrint OS", layout="wide", initial_sidebar_state="collapsed")
 
-# 2. محرك التصميم (The UI Engine - Deep Navy & Neon Blue)
+# 2. محرك الجماليات: أزرق معماري + أبيض ملكي (Minimalist Navy & White)
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;700&family=JetBrains+Mono&display=swap');
-    
-    /* الأساسيات: خلفية داكنة فخمة */
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@200;400;700&family=Playfair+Display:ital@1&display=swap');
+
+    /* الأساسيات: نظافة بصرية تامة */
     html, body, [class*="css"] { 
         font-family: 'Cairo', sans-serif; 
         direction: rtl; text-align: right;
-        background-color: #050a14;
-        color: #e2e8f0;
+        background-color: #ffffff; /* خلفية بيضاء صريحة للمينيماليزم */
+        color: #0f172a;
     }
 
-    /* إخفاء الزوائد */
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-
-    /* الحاوية الرئيسية (Main Wrapper) */
-    .main-wrapper {
-        background: linear-gradient(180deg, #0f172a 0%, #050a14 100%);
-        min-height: 100vh;
-        padding: 2rem;
+    /* الـ Sidebar: أزرق غامق جداً يميل للكحلي الملكي */
+    [data-testid="stSidebar"] {
+        background-color: #0f172a;
+        color: white;
+        border-left: 1px solid #e2e8f0;
     }
 
-    /* بطاقات التحكم (The Command Cards) */
-    .blueprint-card {
-        background: rgba(15, 23, 42, 0.6);
-        border: 1px solid rgba(59, 130, 246, 0.2);
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        transition: 0.4s;
-        position: relative;
-        overflow: hidden;
-    }
-    .blueprint-card::before {
-        content: ""; position: absolute; top: 0; right: 0; width: 4px; height: 100%;
-        background: #3b82f6;
-    }
-    .blueprint-card:hover {
-        border-color: #0ea5e9;
-        box-shadow: 0 0 15px rgba(14, 165, 233, 0.2);
-    }
-
-    /* الهيدر (The Blueprint Header) */
-    .blueprint-header {
-        border-bottom: 1px solid rgba(59, 130, 246, 0.3);
-        padding-bottom: 1rem;
-        margin-bottom: 2rem;
+    /* الهيدر: بسيط وفخم */
+    .arch-header {
+        padding: 40px 0;
+        border-bottom: 2px solid #0f172a;
+        margin-bottom: 40px;
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: baseline;
+    }
+    .arch-title {
+        font-family: 'Playfair Display', serif; /* لمسة فنية معمارية */
+        font-size: 3.5rem;
+        color: #0f172a;
+        letter-spacing: -2px;
+        margin: 0;
     }
 
-    /* أزرار التشغيل (Cyber Buttons) */
+    /* نظام الـ Bento Grid للبطاقات */
+    .bento-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0px; /* زوايا حادة للمسة معمارية رسمية */
+        padding: 30px;
+        transition: 0.3s ease;
+        height: 100%;
+    }
+    .bento-card:hover {
+        background: #0f172a;
+        color: white !important;
+    }
+    .bento-card:hover h3, .bento-card:hover p { color: white !important; }
+
+    /* الأزرار: أزرق كهربائي للنقاط التفاعلية فقط */
     .stButton > button {
         background: transparent;
-        color: #3b82f6;
-        border: 1px solid #3b82f6;
-        border-radius: 4px;
-        font-weight: bold;
+        color: #0f172a;
+        border: 2px solid #0f172a;
+        border-radius: 0px;
+        padding: 10px 40px;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 1px;
         width: 100%;
-        transition: 0.3s;
+        transition: 0.4s;
     }
     .stButton > button:hover {
-        background: #3b82f6;
+        background: #3b82f6; /* Electric Blue */
         color: white;
-        box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        border-color: #3b82f6;
     }
 
-    /* التبويبات (Cyber Tabs) */
-    .stTabs [data-baseweb="tab-list"] { background: transparent; gap: 10px; }
+    /* التبويبات: خطوط رفيعة ونظيفة */
+    .stTabs [data-baseweb="tab-list"] { gap: 40px; border-bottom: 1px solid #e2e8f0; }
     .stTabs [data-baseweb="tab"] {
-        color: #94a3b8; background: #0f172a; border: 1px solid #1e293b;
-        padding: 10px 25px; border-radius: 4px;
+        background: transparent; color: #94a3b8;
+        font-size: 1.1rem; font-weight: 400;
     }
     .stTabs [aria-selected="true"] {
-        color: #0ea5e9 !important; border-color: #0ea5e9 !important;
-        background: rgba(14, 165, 233, 0.1) !important;
+        color: #0f172a !important; border-bottom: 3px solid #0f172a !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 3. مكان الـ 1200 سطر الخاص بك (المنطق البرمجي)
+# 3. الربط البرمجي (هنا تضع الـ 1200 سطر بتوعك)
 # ---------------------------------------------------------
-# ضع دوالك هنا. لا تقلق، لن نغير فيها شيئاً.
-
-def run_your_logic():
-    # هنا يتم استدعاء منطق الحصر، معالجة الصور، والذكاء الاصطناعي الخاص بك
+# سأترك لك الدوال فارغة لتقوم بوضع منطقك الداخلي فيها
+def main_logic():
     pass
 
 # ---------------------------------------------------------
-# 4. واجهة المستخدم (The Elite Interface)
+# 4. الواجهة المعمارية الرئيسية
 # ---------------------------------------------------------
 
-with st.container():
-    # الهيدر الاحترافي
-    st.markdown(f"""
-    <div class="blueprint-header">
-        <div>
-            <h1 style="margin:0; color:#3b82f6; font-family:'JetBrains Mono';">BLUEPRINT <span style="color:#f8fafc; font-weight:300;">OS_GATEWAY</span></h1>
-            <p style="color:#64748b; margin:0;">نظام الإدارة الهندسية الذكي | إصدار 2026</p>
-        </div>
-        <div style="text-align: left;">
-            <code style="color:#0ea5e9;">PROJECT_ID: RAK_TOWER_01</code><br>
-            <span style="color:#94a3b8; font-size:0.8rem;">{datetime.now().strftime('%H:%M:%S | %Y-%m-%d')}</span>
-        </div>
+# الهيدر الفخم
+st.markdown("""
+<div class="arch-header">
+    <div>
+        <h1 class="arch-title">BluePrint <span style="font-size: 1rem; font-style: italic; font-weight: 200;">Engineering OS</span></h1>
+        <p style="color: #64748b; margin: 0; font-size: 0.9rem;">Gateway v3.0 | Modern Architecture & AI Integration</p>
     </div>
-    """, unsafe_allow_html=True)
+    <div style="text-align: left;">
+        <span style="font-weight: 700; color: #0f172a;">RAK_STUDIO // 2026</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    # صف المؤشرات التقنية (Dashboard Metrics)
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown('<div class="blueprint-card"><h6>💰 الميزانية المرصودة</h6><h3 style="color:#3b82f6;">4.25M</h3></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown('<div class="blueprint-card"><h6>🚧 حالة الإنجاز</h6><h3 style="color:#10b981;">72%</h3></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown('<div class="blueprint-card"><h6>⚠️ التنبيهات الإنشائية</h6><h3 style="color:#ef4444;">02</h3></div>', unsafe_allow_html=True)
-    with col4:
-        st.markdown('<div class="blueprint-card"><h6>📁 الملفات الفنية</h6><h3 style="color:#f8fafc;">128</h3></div>', unsafe_allow_html=True)
+# صف الإحصائيات (The Bento Row)
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.markdown('<div class="bento-card"><h3>92%</h3><p style="color: #64748b;">كفاءة التصميم</p></div>', unsafe_allow_html=True)
+with col2:
+    st.markdown('<div class="bento-card"><h3>12</h3><p style="color: #64748b;">مخطط معتمد</p></div>', unsafe_allow_html=True)
+with col3:
+    st.markdown('<div class="bento-card"><h3>03</h3><p style="color: #64748b;">تحذيرات هيكلية</p></div>', unsafe_allow_html=True)
+with col4:
+    st.markdown('<div class="bento-card"><h3>4.5M</h3><p style="color: #64748b;">تكلفة تقديرية</p></div>', unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<br><br>", unsafe_allow_html=True)
 
-    # منطقة العمليات (The Workspace)
-    tabs = st.tabs(["[01] محرك BLUE الذكي", "[02] الحصر والكميات", "[03] الرقابة الفنية", "[04] الأرشيف"])
+# منطقة العمل (Workspace Tabs)
+tabs = st.tabs(["01. الذكاء المهني", "02. الحصر الرقمي", "03. المواصفات الفنية", "04. أرشيف المشروع"])
 
-    with tabs[0]:
-        c_left, c_right = st.columns([2, 1])
-        with c_left:
-            st.markdown("<div class='blueprint-card'><h4>🤖 استشارة الذكاء الاصطناعي</h4>", unsafe_allow_html=True)
-            # هنا تضع كود المحادثة من الـ 1200 سطر
-            st.write("جاهز لتحليل بيانات المشروع...")
-            st.chat_input("أدخل استفسارك الهندسي هنا...")
-            st.markdown("</div>", unsafe_allow_html=True)
-        with c_right:
-            st.markdown("<div class='blueprint-card'><h4>📑 ملخص الحالة</h4>", unsafe_allow_html=True)
-            st.button("تحديث البيانات")
-            st.button("تصدير التقرير")
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    with tabs[1]:
-        st.markdown("<div class='blueprint-card'>", unsafe_allow_html=True)
-        # هنا تعرض جداول الحصر الخاصة بك
-        st.subheader("جداول الكميات الديناميكية")
-        st.info("قم برفع ملف الـ Excel أو اطلب من Blue الحصر التلقائي.")
+with tabs[0]:
+    c_chat, c_info = st.columns([2, 1])
+    with c_chat:
+        st.markdown("<div style='border-right: 1px solid #e2e8f0; padding-right: 20px;'>", unsafe_allow_html=True)
+        st.subheader("💬 اسأل محرك Blue")
+        # هنا يظهر الـ Chat Input والمنطق الخاص بـ 1200 سطر
+        st.chat_input("اكتب استفسارك الهندسي...")
         st.markdown("</div>", unsafe_allow_html=True)
+    with c_info:
+        st.write("🛠️ **أدوات التحكم**")
+        st.button("تحديث الحسابات")
+        st.button("تصدير التقرير النهائي")
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.image("https://images.unsplash.com/photo-1503387762-592deb58ef4e?q=80&w=400", caption="آخر لقطة لموقع العمل")
 
-# تذييل الصفحة (Footer)
-st.markdown(f"""
-<div style="margin-top: 50px; border-top: 1px solid rgba(59, 130, 246, 0.1); padding-top: 20px; text-align: center; color: #475569;">
-    BLUEPRINT AI_ENGINEERING_OS // RAS AL KHAIMAH // 2026
+with tabs[1]:
+    st.subheader("📦 بيانات الحصر والكميات")
+    # اربط هنا جداولك من الكود الأصلي
+    st.table({"البند": ["خرسانة مسلحة", "حديد تسليح"], "الكمية": ["150 م3", "12 طن"]})
+
+# تذييل الصفحة
+st.markdown("""
+<div style="margin-top: 100px; padding: 20px; border-top: 1px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 0.8rem; letter-spacing: 2px;">
+    BLUEPRINT // INTEGRATED SYSTEM // EST. 2026
 </div>
 """, unsafe_allow_html=True)
