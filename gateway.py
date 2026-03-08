@@ -1,165 +1,163 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from datetime import datetime
 
-# ==========================================
-# 1. إعدادات الهوية البصرية (The Blue Identity)
-# ==========================================
-st.set_page_config(page_title="BluePrint | Premium Engineering OS", layout="wide")
+# 1. الإعدادات الفنية (Architecture Settings)
+st.set_page_config(page_title="BluePrint OS | Elite Gateway", layout="wide")
 
+# 2. محرك التصميم (The UI Engine - Deep Navy & Neon Blue)
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;700&family=JetBrains+Mono&display=swap');
     
-    /* الخلفية والخطوط */
+    /* الأساسيات: خلفية داكنة فخمة */
     html, body, [class*="css"] { 
         font-family: 'Cairo', sans-serif; 
-        direction: rtl; 
-        text-align: right;
-        background-color: #f0f4f8;
+        direction: rtl; text-align: right;
+        background-color: #050a14;
+        color: #e2e8f0;
     }
 
-    /* الشريط العلوي الفخم */
-    .main-header {
-        background: linear-gradient(135deg, #0f172a 0%, #1e40af 100%);
-        padding: 40px;
-        border-radius: 0 0 40px 40px;
-        color: white;
-        box-shadow: 0 10px 30px rgba(30, 64, 175, 0.2);
-        margin-bottom: 30px;
+    /* إخفاء الزوائد */
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* الحاوية الرئيسية (Main Wrapper) */
+    .main-wrapper {
+        background: linear-gradient(180deg, #0f172a 0%, #050a14 100%);
+        min-height: 100vh;
+        padding: 2rem;
     }
 
-    /* بطاقات البيانات (The Modern Cards) */
-    .metric-card {
-        background: white;
-        padding: 25px;
-        border-radius: 20px;
-        border-right: 8px solid #3b82f6;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        transition: 0.3s ease;
-    }
-    .metric-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 12px 25px rgba(59, 130, 246, 0.15);
-    }
-
-    /* أزرار الأكشن */
-    .stButton > button {
-        background: #2563eb;
-        color: white;
+    /* بطاقات التحكم (The Command Cards) */
+    .blueprint-card {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(59, 130, 246, 0.2);
         border-radius: 12px;
-        border: none;
-        padding: 12px 25px;
-        font-weight: 700;
+        padding: 20px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        transition: 0.4s;
+        position: relative;
+        overflow: hidden;
+    }
+    .blueprint-card::before {
+        content: ""; position: absolute; top: 0; right: 0; width: 4px; height: 100%;
+        background: #3b82f6;
+    }
+    .blueprint-card:hover {
+        border-color: #0ea5e9;
+        box-shadow: 0 0 15px rgba(14, 165, 233, 0.2);
+    }
+
+    /* الهيدر (The Blueprint Header) */
+    .blueprint-header {
+        border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* أزرار التشغيل (Cyber Buttons) */
+    .stButton > button {
+        background: transparent;
+        color: #3b82f6;
+        border: 1px solid #3b82f6;
+        border-radius: 4px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
         width: 100%;
         transition: 0.3s;
     }
     .stButton > button:hover {
-        background: #1d4ed8;
-        box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4);
+        background: #3b82f6;
+        color: white;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
     }
 
-    /* تخصيص التبويبات (Tabs) */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 15px;
-        background-color: transparent;
-    }
+    /* التبويبات (Cyber Tabs) */
+    .stTabs [data-baseweb="tab-list"] { background: transparent; gap: 10px; }
     .stTabs [data-baseweb="tab"] {
-        background-color: white;
-        border-radius: 15px;
-        padding: 15px 30px;
-        color: #1e3a8a;
-        font-weight: 600;
-        border: 1px solid #e2e8f0;
+        color: #94a3b8; background: #0f172a; border: 1px solid #1e293b;
+        padding: 10px 25px; border-radius: 4px;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #2563eb !important;
-        color: white !important;
-        border: none;
+        color: #0ea5e9 !important; border-color: #0ea5e9 !important;
+        background: rgba(14, 165, 233, 0.1) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. منطقة الوظائف (مكان الـ 1200 سطر الخاص بك)
-# ==========================================
-# [ملاحظة: ضع هنا جميع الدوال والوظائف والـ Backend Calls الخاصة بك]
-# لا تلمس الكود الموجود هنا، فقط أضف وظائفك تحت هذا السطر:
+# ---------------------------------------------------------
+# 3. مكان الـ 1200 سطر الخاص بك (المنطق البرمجي)
+# ---------------------------------------------------------
+# ضع دوالك هنا. لا تقلق، لن نغير فيها شيئاً.
 
-def your_original_functions():
-    # هنا تضع منطق الـ 1200 سطر
+def run_your_logic():
+    # هنا يتم استدعاء منطق الحصر، معالجة الصور، والذكاء الاصطناعي الخاص بك
     pass
 
-# ==========================================
-# 3. واجهة المستخدم (The Interface)
-# ==========================================
+# ---------------------------------------------------------
+# 4. واجهة المستخدم (The Elite Interface)
+# ---------------------------------------------------------
 
-# الهيدر الترحيبي
-st.markdown("""
-<div class="main-header">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+with st.container():
+    # الهيدر الاحترافي
+    st.markdown(f"""
+    <div class="blueprint-header">
         <div>
-            <h1 style="margin:0; font-size: 2.8rem;">BluePrint <span style="font-weight:300;">OS</span></h1>
-            <p style="opacity: 0.8; font-size: 1.1rem;">نظام التشغيل الهندسي المتكامل | بوابة التحكم الذكية</p>
+            <h1 style="margin:0; color:#3b82f6; font-family:'JetBrains Mono';">BLUEPRINT <span style="color:#f8fafc; font-weight:300;">OS_GATEWAY</span></h1>
+            <p style="color:#64748b; margin:0;">نظام الإدارة الهندسية الذكي | إصدار 2026</p>
         </div>
         <div style="text-align: left;">
-            <div style="font-size: 0.9rem; opacity: 0.7;">تاريخ اليوم</div>
-            <div style="font-size: 1.2rem; font-weight: bold;">""" + datetime.now().strftime('%Y-%m-%d') + """</div>
+            <code style="color:#0ea5e9;">PROJECT_ID: RAK_TOWER_01</code><br>
+            <span style="color:#94a3b8; font-size:0.8rem;">{datetime.now().strftime('%H:%M:%S | %Y-%m-%d')}</span>
         </div>
     </div>
+    """, unsafe_allow_html=True)
+
+    # صف المؤشرات التقنية (Dashboard Metrics)
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown('<div class="blueprint-card"><h6>💰 الميزانية المرصودة</h6><h3 style="color:#3b82f6;">4.25M</h3></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<div class="blueprint-card"><h6>🚧 حالة الإنجاز</h6><h3 style="color:#10b981;">72%</h3></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown('<div class="blueprint-card"><h6>⚠️ التنبيهات الإنشائية</h6><h3 style="color:#ef4444;">02</h3></div>', unsafe_allow_html=True)
+    with col4:
+        st.markdown('<div class="blueprint-card"><h6>📁 الملفات الفنية</h6><h3 style="color:#f8fafc;">128</h3></div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # منطقة العمليات (The Workspace)
+    tabs = st.tabs(["[01] محرك BLUE الذكي", "[02] الحصر والكميات", "[03] الرقابة الفنية", "[04] الأرشيف"])
+
+    with tabs[0]:
+        c_left, c_right = st.columns([2, 1])
+        with c_left:
+            st.markdown("<div class='blueprint-card'><h4>🤖 استشارة الذكاء الاصطناعي</h4>", unsafe_allow_html=True)
+            # هنا تضع كود المحادثة من الـ 1200 سطر
+            st.write("جاهز لتحليل بيانات المشروع...")
+            st.chat_input("أدخل استفسارك الهندسي هنا...")
+            st.markdown("</div>", unsafe_allow_html=True)
+        with c_right:
+            st.markdown("<div class='blueprint-card'><h4>📑 ملخص الحالة</h4>", unsafe_allow_html=True)
+            st.button("تحديث البيانات")
+            st.button("تصدير التقرير")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    with tabs[1]:
+        st.markdown("<div class='blueprint-card'>", unsafe_allow_html=True)
+        # هنا تعرض جداول الحصر الخاصة بك
+        st.subheader("جداول الكميات الديناميكية")
+        st.info("قم برفع ملف الـ Excel أو اطلب من Blue الحصر التلقائي.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# تذييل الصفحة (Footer)
+st.markdown(f"""
+<div style="margin-top: 50px; border-top: 1px solid rgba(59, 130, 246, 0.1); padding-top: 20px; text-align: center; color: #475569;">
+    BLUEPRINT AI_ENGINEERING_OS // RAS AL KHAIMAH // 2026
 </div>
 """, unsafe_allow_html=True)
-
-# القائمة الجانبية المودرن
-with st.sidebar:
-    st.markdown("<h2 style='color:#1e3a8a; text-align:center;'>القائمة الرئيسية</h2>", unsafe_allow_html=True)
-    st.divider()
-    selected_project = st.selectbox("📁 المشروع النشط", ["برج جوهرة دبي", "منتجع الفجيرة الملكي"])
-    st.markdown("---")
-    st.write("📊 **إحصائيات سريعة**")
-    st.progress(85, text="نسبة الإنجاز الكلية")
-    st.markdown("---")
-    st.button("⚙️ إعدادات النظام")
-
-# صف المؤشرات (Metrics Row)
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    st.markdown('<div class="metric-card"><h3>💰 ميزانية</h3><h2 style="color:#2563eb;">2.4M</h2><p>درهم إماراتي</p></div>', unsafe_allow_html=True)
-with c2:
-    st.markdown('<div class="metric-card"><h3>🚧 مهام</h3><h2 style="color:#2563eb;">14</h2><p>قيد التنفيذ</p></div>', unsafe_allow_html=True)
-with c3:
-    st.markdown('<div class="metric-card"><h3>🔍 عيوب</h3><h2 style="color:#ef4444;">02</h2><p>تحتاج مراجعة</p></div>', unsafe_allow_html=True)
-with c4:
-    st.markdown('<div class="metric-card"><h3>📄 ملفات</h3><h2 style="color:#2563eb;">48</h2><p>وثيقة فنية</p></div>', unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# التبويبات الرئيسية (The Functional Tabs)
-tab_chat, tab_boq, tab_defects, tab_reports = st.tabs(["🤖 ذكاء Blue", "📋 جداول الحصر", "🔎 إدارة العيوب", "📈 التحليلات"])
-
-with tab_chat:
-    st.markdown("### 💬 استشاري Blue الذكي")
-    # هنا تربط الـ Chatbot بالـ 1200 سطر الخاصة بك
-    if "messages" not in st.session_state: st.session_state.messages = []
-    
-    # حاوية المحادثة بتصميم نظيف
-    chat_container = st.container()
-    with chat_container:
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]): st.write(msg["content"])
-
-    if prompt := st.chat_input("اسأل Blue عن أي تفصيل هندسي..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("assistant"):
-            st.write("جاري تحليل البيانات وربطها بالأكواد الهندسية...")
-
-with tab_boq:
-    st.markdown("### 📦 الحصر الرقمي المتقدم")
-    # عرض البيانات (اربطها بوظيفة الحصر لديك)
-    data = {"البند": ["حديد 12 مم", "خرسانة جاهزة", "عوازل"], "الكمية": [20, 150, 400], "التكلفة": ["50k", "120k", "30k"]}
-    st.dataframe(pd.DataFrame(data), use_container_width=True)
-
-# تذييل الصفحة
-st.markdown("---")
-st.markdown("<div style='text-align: center; color: #64748b;'>BluePrint Engineering OS © 2026 | الدقة في كل تفصيلة</div>", unsafe_allow_html=True)
