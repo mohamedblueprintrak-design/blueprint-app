@@ -32,3 +32,4 @@ langchain-chroma==0.2.2
 sentence-transformers==3.4.1
 chromadb==0.6.3
 gunicorn
+psycopg2-binary==2.9.10
