@@ -8,7 +8,13 @@ from datetime import datetime
 from passlib.context import CryptContext
 
 SQLALCHEMY_DATABASE_URL = "postgresql://blueprint:gUSE6ak6O9CTLP0T2mrfqw6aUSkZ6YCM@dpg-d6mgrkdm5p6s73fqfnjg-a/blueprint_db_2kv6"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+# تعديل: استخدام متغير البيئة DATABASE_URL مع دعم كل من SQLite و PostgreSQL
+if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
+    # PostgreSQL لا يحتاج connect_args
+    engine = create_engine(SQLALCHEMY_DATABASE_URL)
+else:
+    # SQLite يحتاج connect_args
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
