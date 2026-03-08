@@ -1,121 +1,120 @@
 import os
-import base64
 import logging
-import json
-import re
-import pypdf
-from io import BytesIO
-from classifier import classify_request
-from agents import struct_agent, vision_agent, reasoning_agent
-from tools import get_site_checklist, boq_steel_calculator, boq_concrete_calculator, update_unit_prices_from_db
-from knowledge_retriever import retriever  # <-- استيراد نظام قاعدة المعرفة
+import shutil
+from typing import List, Dict, Any
+from pathlib import Path
 
-logger = logging.getLogger("orchestrator")
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain.docstore.document import Document
 
-async def extract_pdf_text(file_bytes):
-    try:
-        reader = pypdf.PdfReader(BytesIO(file_bytes))
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text
-    except:
-        return ""
+logger = logging.getLogger("knowledge_retriever")
 
-async def route_request(text=None, file_bytes=None, file_type=None, project_id=None, history=None):
-    results = {}
+class KnowledgeRetriever:
+    """نظام استرجاع المعرفة من ملفات PDF باستخدام LangChain و ChromaDB"""
     
-    # تحديث الأسعار حسب إعدادات المشروع
-    if project_id:
-        update_unit_prices_from_db(project_id)
-    
-    # --- التوجيه المباشر للكمرات (حتى في وضع المحاكاة) ---
-    if text and ("كمرة" in text or "beam" in text.lower()):
-        nums = re.findall(r"[-+]?\d*\.\d+|\d+", text)
-        results = struct_agent.analyze(text, nums)
-        return {"task": "beam_tool", "results": results, "domain": "design"}
-    
-    classification = classify_request(text, file_type)
-    task = classification.get("task", "chat")
-    domain = classification.get("domain", "general")
-    
-    image_base64 = base64.b64encode(file_bytes).decode("utf-8") if file_bytes else None
-    nums = re.findall(r"[-+]?\d*\.\d+|\d+", text or "")
-
-    # --- البحث في قاعدة المعرفة (إذا كان هناك نص) ---
-    knowledge_context = ""
-    if text:
-        try:
-            relevant_chunks = retriever.retrieve(text, k=3)
-            if relevant_chunks:
-                knowledge_context = retriever.format_context(relevant_chunks)
-                logger.info(f"تم العثور على {len(relevant_chunks)} قطعة معرفة ذات صلة")
-        except Exception as e:
-            logger.error(f"خطأ في استرجاع المعرفة: {e}")
-
-    # --- مسار التصميم ---
-    if domain == "design":
-        results = struct_agent.analyze(text, nums)
-        if results:
-            summary = await reasoning_agent.generate_summary(results)
-            results["🤖 ملخص ذكي"] = summary
-        return {"task": task, "results": results, "domain": domain}
-
-    # --- مسار الموقع ---
-    if domain == "site":
-        if task == "image_analysis" and image_base64:
-            analysis = await vision_agent.analyze_image(image_base64, "حلل الصورة هندسياً")
-            results["📷 التحليل"] = analysis
-            defects = await vision_agent.detect_defects(image_base64)
-            results["⚠️ العيوب"] = defects
-        elif task == "checklist_tool" and text:
-            work_type = "عام"
-            if "نجارة" in text:
-                work_type = "نجارة"
-            elif "حدادة" in text:
-                work_type = "حدادة"
-            elif "صب" in text:
-                work_type = "صب"
-            checklist = get_site_checklist(work_type)
-            results["📋 قائمة المراجعة"] = checklist["text"]
-            results["checklist_data"] = checklist["items"]
-        return {"task": task, "results": results, "domain": domain}
-
-    # --- مسار الحصر (BOQ) ---
-    if domain == "boq" and text:
-        if "حديد" in text or "steel" in text.lower():
-            nums = re.findall(r"[-+]?\d*\.\d+|\d+", text)
-            if len(nums) >= 3:
-                d, l, c = map(float, nums[:3])
-                boq = boq_steel_calculator(d, l, c)
-                if boq["success"]:
-                    results["boq_item"] = boq["item"]
-                    results["📦 بند حديد"] = f"{boq['item']['description']} - كمية {boq['item']['quantity']} طن - سعر {boq['item']['total_price']} جنيه"
-        elif "خرسانة" in text or "concrete" in text.lower():
-            nums = re.findall(r"[-+]?\d*\.\d+|\d+", text)
-            if nums:
-                v = float(nums[0])
-                boq = boq_concrete_calculator(v)
-                if boq["success"]:
-                    results["boq_item"] = boq["item"]
-                    results["📦 بند خرسانة"] = f"{boq['item']['description']} - كمية {boq['item']['quantity']} م³ - سعر {boq['item']['total_price']} جنيه"
-        return {"task": task, "results": results, "domain": domain}
-
-    # --- مسار المكتب الفني (تحليل PDF) ---
-    if domain == "office" and file_bytes:
-        pdf_text = await extract_pdf_text(file_bytes)
-        summary = await reasoning_agent.generate_summary({"text": pdf_text[:2000]})
-        results["📄 تحليل الملف"] = summary
-        return {"task": task, "results": results, "domain": domain}
-
-    # --- عام (الدردشة) مع تعزيز المعرفة ---
-    if text:
-        # دمج السياق المعرفي مع السؤال إذا وجد
-        enhanced_prompt = text
-        if knowledge_context:
-            enhanced_prompt = f"{knowledge_context}\n\nسؤال المستخدم: {text}\n\nيرجى الإجابة بناءً على المعلومات أعلاه، مع ذكر المصدر."
+    def __init__(self, knowledge_base_dir: str = "knowledge_base", persist_directory: str = "chroma_db"):
+        self.knowledge_base_dir = knowledge_base_dir
+        self.persist_directory = persist_directory
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",  # يدعم العربية
+            model_kwargs={'device': 'cpu'},
+            encode_kwargs={'normalize_embeddings': True}
+        )
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,      # حجم القطعة (حوالي 1000 كلمة)
+            chunk_overlap=200,     # تداخل بين القطع لضمان استمرارية السياق
+            separators=["\n\n", "\n", ".", " ", ""]
+        )
+        self.vectorstore = None
         
-        res = await reasoning_agent.chat(enhanced_prompt, history=history, project_id=project_id)
-        results["💻 Blue"] = res
+    def index_pdfs(self):
+        """فهرسة جميع ملفات PDF في مجلد knowledge_base"""
+        pdf_files = list(Path(self.knowledge_base_dir).glob("*.pdf"))
+        if not pdf_files:
+            logger.warning("لا توجد ملفات PDF في المجلد %s", self.knowledge_base_dir)
+            return
+        
+        all_documents = []
+        for pdf_path in pdf_files:
+            logger.info(f"جاري معالجة الملف: {pdf_path.name}")
+            try:
+                loader = PyPDFLoader(str(pdf_path))
+                documents = loader.load()
+                
+                # إضافة معلومات المصدر (اسم الملف) إلى البيانات الوصفية
+                for doc in documents:
+                    doc.metadata["source"] = pdf_path.name
+                    doc.metadata["page"] = doc.metadata.get("page", 0) + 1  # رقم الصفحة
+                
+                # تقسيم المستند إلى قطع أصغر
+                chunks = self.text_splitter.split_documents(documents)
+                all_documents.extend(chunks)
+                logger.info(f"تم تقسيم {pdf_path.name} إلى {len(chunks)} قطعة")
+            except Exception as e:
+                logger.error(f"خطأ في معالجة {pdf_path.name}: {e}")
+        
+        # تخزين القطع في قاعدة بيانات متجهية
+        if all_documents:
+            # إذا كان المجلد موجوداً، نحذفه أولاً لضمان فهرسة جديدة
+            if os.path.exists(self.persist_directory):
+                shutil.rmtree(self.persist_directory)
+            
+            self.vectorstore = Chroma.from_documents(
+                documents=all_documents,
+                embedding=self.embeddings,
+                persist_directory=self.persist_directory
+            )
+            self.vectorstore.persist()
+            logger.info(f"تم فهرسة {len(all_documents)} قطعة معرفة بنجاح")
+        else:
+            logger.warning("لم يتم استخراج أي نصوص من الملفات")
+    
+    def load_index(self):
+        """تحميل الفهرس الموجود (بدون إعادة الفهرسة)"""
+        if os.path.exists(self.persist_directory):
+            self.vectorstore = Chroma(
+                persist_directory=self.persist_directory,
+                embedding_function=self.embeddings
+            )
+            logger.info("تم تحميل الفهرس الموجود")
+            return True
+        return False
+    
+    def retrieve(self, query: str, k: int = 5) -> List[Document]:
+        """البحث عن أكثر القطع صلة بالسؤال"""
+        if not self.vectorstore:
+            if not self.load_index():
+                logger.error("لا يوجد فهرس معرفة. قم بتشغيل index_pdfs() أولاً")
+                return []
+        
+        # استخدام MMR (Maximum Marginal Relevance) للحصول على نتائج متنوعة
+        docs = self.vectorstore.max_marginal_relevance_search(query, k=k, fetch_k=20)
+        return docs
+    
+    def format_context(self, docs: List[Document]) -> str:
+        """تنسيق القطع المسترجعة لتكون سياقاً مقروءاً"""
+        if not docs:
+            return ""
+        
+        context = "المعلومات التالية مأخوذة من المراجع الهندسية:\n\n"
+        for i, doc in enumerate(docs, 1):
+            source = doc.metadata.get("source", "غير معروف")
+            page = doc.metadata.get("page", "غير معروف")
+            context += f"[{i}] من {source} (صفحة {page}):\n"
+            context += doc.page_content.strip() + "\n\n"
+        return context
 
-    return {"task": task, "results": results, "domain": domain}
+# إنشاء كائن عام للاستخدام في التطبيق
+retriever = KnowledgeRetriever()
+
+# إذا كان هناك مجلد معرفة، حاول تحميل الفهرس، وإلا فهرسة الملفات
+if os.path.exists("knowledge_base"):
+    if not retriever.load_index():
+        print("🟡 جاري فهرسة ملفات PDF لأول مرة (قد يستغرق بضع دقائق)...")
+        retriever.index_pdfs()
+        print("🟢 تمت الفهرسة بنجاح")
+else:
+    print("🔴 مجلد knowledge_base غير موجود. أنشئه وأضف ملفات PDF")
