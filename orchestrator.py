@@ -8,7 +8,7 @@ from io import BytesIO
 from classifier import classify_request
 from agents import struct_agent, vision_agent, reasoning_agent
 from tools import get_site_checklist, boq_steel_calculator, boq_concrete_calculator, update_unit_prices_from_db
-#from knowledge_retriever import retriever  # <-- استيراد نظام قاعدة المعرفة
+from knowledge_retriever import retriever  # <-- استيراد نظام قاعدة المعرفة
 
 logger = logging.getLogger("orchestrator")
 
