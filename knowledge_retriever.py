@@ -24,7 +24,7 @@ class KnowledgeRetriever:
         """تحميل نموذج التضمين عند الطلب فقط (Lazy Loading)"""
         if self._embeddings is None:
             print("🟡 جاري تحميل نموذج التضمين لأول مرة (قد يستغرق 30-60 ثانية)...")
-            from langchain_community.embeddings import HuggingFaceEmbeddings
+            from langchain_huggingface import HuggingFaceEmbeddings
             self._embeddings = HuggingFaceEmbeddings(
                 model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
                 model_kwargs={'device': 'cpu'},
