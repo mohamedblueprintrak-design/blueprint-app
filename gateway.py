@@ -1,6 +1,6 @@
 """
 BluePrint Engineering Consultancy - AI-Powered Engineering OS
-الواجهة النهائية - خلفية زرقاء متوسطة + شريط جانبي أزرق متناسق
+الواجهة النهائية - حقول إدخال بيضاء بنص أسود
 """
 
 import streamlit as st
@@ -72,7 +72,7 @@ def get_health_color(score):
     else:
         return "#ef4444"  # أحمر
 
-# --- CSS مخصص مع إصلاح مشكلة ظهور النصوص ---
+# --- CSS مخصص مع حقول إدخال بيضاء ونص أسود ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
@@ -100,7 +100,7 @@ st.markdown("""
         color: #ffffff;
     }
 
-    /* نصوص الشريط الجانبي */
+    /* نصوص الشريط الجانبي (التسميات) */
     [data-testid="stSidebar"] .stMarkdown,
     [data-testid="stSidebar"] .stText,
     [data-testid="stSidebar"] label,
@@ -109,27 +109,27 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* حقول الإدخال في الشريط الجانبي (خلفية زرقاء داكنة) */
+    /* حقول الإدخال في الشريط الجانبي (خلفية بيضاء، نص أسود) */
     [data-testid="stSidebar"] .stTextInput input,
     [data-testid="stSidebar"] .stSelectbox select,
     [data-testid="stSidebar"] .stNumberInput input {
-        background: #0f2b4f !important;
-        color: #ffffff !important;
+        background: #ffffff !important;
+        color: #000000 !important;
         border: 1px solid #38bdf8 !important;
         border-radius: 30px;
         padding: 0.75rem 1rem;
     }
     
     [data-testid="stSidebar"] .stTextInput input::placeholder {
-        color: rgba(255, 255, 255, 0.7);
+        color: #6b7280;  /* رمادي فاتح للـ placeholder */
     }
 
-    /* حقول الإدخال في المحتوى الرئيسي */
+    /* حقول الإدخال في المحتوى الرئيسي (إذا لزم الأمر) */
     .stApp .stTextInput input,
     .stApp .stSelectbox select,
     .stApp .stNumberInput input {
-        background: rgba(0, 0, 0, 0.3) !important;
-        color: #ffffff !important;
+        background: rgba(255, 255, 255, 0.9) !important;
+        color: #000000 !important;
         border: 1px solid #38bdf8 !important;
         border-radius: 30px;
         padding: 0.75rem 1rem;
@@ -384,10 +384,12 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # زر تبديل اللغة والوضع الليلي
+    # زر تبديل اللغة والوضع الليلي (تم تعديلها لإزالة on_click)
     col_lang, col_dark = st.columns(2)
     with col_lang:
-        st.button("🇺🇸 EN" if st.session_state.language == "ar" else "🇸🇦 ع", on_click=switch_lang, key="lang_btn", use_container_width=True)
+        if st.button("🇺🇸 EN" if st.session_state.language == "ar" else "🇸🇦 ع", key="lang_btn", use_container_width=True):
+            st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
+            st.rerun()
     with col_dark:
         if st.button("🌙" if not st.session_state.dark_mode else "☀️", key="dark_btn", use_container_width=True):
             st.session_state.dark_mode = not st.session_state.dark_mode
