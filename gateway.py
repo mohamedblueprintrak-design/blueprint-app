@@ -72,7 +72,7 @@ def get_health_color(score):
     else:
         return "#ef4444"  # أحمر
 
-# --- CSS مخصص: خلفية زرقاء متوسطة + شريط جانبي أزرق ---
+# --- CSS مخصص مع إصلاح مشكلة ظهور النصوص ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
@@ -92,14 +92,15 @@ st.markdown("""
         color: #f8fafc;  /* نص أبيض */
     }
 
-    /* الشريط الجانبي - أزرق متناسق مع خلفية أغمق قليلاً */
+    /* الشريط الجانبي - أزرق متناسق */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0f2b4f 0%, #1e4a7a 100%);
         border-right: 1px solid rgba(255, 255, 255, 0.15);
         box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
-        color: #ffffff;  /* نصوص بيضاء */
+        color: #ffffff;
     }
-    
+
+    /* نصوص الشريط الجانبي */
     [data-testid="stSidebar"] .stMarkdown,
     [data-testid="stSidebar"] .stText,
     [data-testid="stSidebar"] label,
@@ -108,25 +109,30 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* حقول الإدخال في الشريط الجانبي (خلفية شبه شفافة) */
+    /* حقول الإدخال في الشريط الجانبي (خلفية زرقاء داكنة) */
     [data-testid="stSidebar"] .stTextInput input,
     [data-testid="stSidebar"] .stSelectbox select,
     [data-testid="stSidebar"] .stNumberInput input {
-        background: rgba(255, 255, 255, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: #0f2b4f !important;
+        color: #ffffff !important;
+        border: 1px solid #38bdf8 !important;
         border-radius: 30px;
         padding: 0.75rem 1rem;
-        color: white;
     }
     
     [data-testid="stSidebar"] .stTextInput input::placeholder {
         color: rgba(255, 255, 255, 0.7);
     }
-    
-    [data-testid="stSidebar"] .stTextInput input:focus,
-    [data-testid="stSidebar"] .stSelectbox select:focus {
-        border-color: #38bdf8;
-        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
+
+    /* حقول الإدخال في المحتوى الرئيسي */
+    .stApp .stTextInput input,
+    .stApp .stSelectbox select,
+    .stApp .stNumberInput input {
+        background: rgba(0, 0, 0, 0.3) !important;
+        color: #ffffff !important;
+        border: 1px solid #38bdf8 !important;
+        border-radius: 30px;
+        padding: 0.75rem 1rem;
     }
 
     /* أزرار في الشريط الجانبي */
@@ -143,21 +149,6 @@ st.markdown("""
     [data-testid="stSidebar"] .stButton > button:hover {
         background: rgba(255, 255, 255, 0.3);
         border-color: #38bdf8;
-    }
-
-    /* التبويبات في الشريط الجانبي */
-    [data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
-        background: transparent;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    }
-    
-    [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
-        color: rgba(255, 255, 255, 0.8);
-    }
-    
-    [data-testid="stSidebar"] .stTabs [aria-selected="true"] {
-        color: #ffffff;
-        border-bottom: 2px solid #38bdf8;
     }
 
     /* بطاقات في المحتوى الرئيسي */
@@ -240,27 +231,6 @@ st.markdown("""
         box-shadow: 0 6px 15px rgba(14, 165, 233, 0.4);
     }
 
-    /* حقول الإدخال في المحتوى الرئيسي */
-    .stApp .stTextInput input,
-    .stApp .stSelectbox select,
-    .stApp .stNumberInput input {
-        background: rgba(255, 255, 255, 0.15);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        border-radius: 30px;
-        padding: 0.75rem 1rem;
-        color: white;
-    }
-    
-    .stApp .stTextInput input::placeholder {
-        color: rgba(255, 255, 255, 0.7);
-    }
-    
-    .stApp .stTextInput input:focus,
-    .stApp .stSelectbox select:focus {
-        border-color: #38bdf8;
-        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
-    }
-
     /* المحادثة */
     .stChatMessage {
         background: rgba(255, 255, 255, 0.1);
@@ -317,6 +287,22 @@ st.markdown("""
         letter-spacing: 0.5px;
     }
 
+    /* مربعات التحميل */
+    .upload-area {
+        border: 2px dashed #38bdf8;
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.05);
+        transition: all 0.2s;
+        color: white;
+    }
+    
+    .upload-area:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: #2563eb;
+    }
+
     /* تحسينات الموبايل */
     @media (max-width: 768px) {
         .chat-message {
@@ -332,11 +318,20 @@ st.markdown("""
             width: 100%;
         }
     }
+
+    /* الوضع الليلي (اختياري) */
+    .dark-mode .stApp {
+        background-color: #0f172a;
+    }
+    .dark-mode .bp-card {
+        background: #1e293b;
+        border-color: #334155;
+        color: #e2e8f0;
+    }
 </style>
-}
 """, unsafe_allow_html=True)
 
-# تطبيق الوضع الليلي (اختياري)
+# تطبيق الوضع الليلي إذا كان مفعلاً
 if st.session_state.dark_mode:
     st.markdown("""
     <style>
@@ -351,10 +346,7 @@ if st.session_state.dark_mode:
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
         }
-    }
-</style>
-""", unsafe_allow_html=True)
-   
+    </style>
     """, unsafe_allow_html=True)
 
 # --- HTML Component: مؤشر الصحة الدائري ---
@@ -450,7 +442,7 @@ with st.sidebar:
                         except Exception as e:
                             st.error(str(e))
     else:
-        # معلومات المستخدم (في الشريط الجانبي)
+        # معلومات المستخدم
         st.markdown(f"""
         <div style="background: rgba(255, 255, 255, 0.15); padding: 1rem; border-radius: 12px; margin-bottom: 1rem;">
             <p style="color: white; font-weight: bold; margin:0;">👤 {st.session_state.user.get('full_name', 'User')}</p>
