@@ -333,6 +333,29 @@ st.markdown("""
         }
     }
 </style>
+/* تأكيد ظهور النصوص في حقول الإدخال بالشريط الجانبي */
+[data-testid="stSidebar"] .stTextInput input,
+[data-testid="stSidebar"] .stSelectbox select,
+[data-testid="stSidebar"] .stNumberInput input {
+    background: #0f2b4f !important;  /* خلفية زرقاء داكنة */
+    color: white !important;
+    border: 1px solid #38bdf8 !important;
+}
+
+/* نفس الشيء للحقول في المحتوى الرئيسي (إذا لزم الأمر) */
+.stApp .stTextInput input,
+.stApp .stSelectbox select,
+.stApp .stNumberInput input {
+    background: rgba(0, 0, 0, 0.3) !important;
+    color: white !important;
+    border: 1px solid #38bdf8 !important;
+}
+
+/* تأكيد ظهور التسميات (labels) */
+[data-testid="stSidebar"] label,
+.stApp label {
+    color: white !important;
+}
 """, unsafe_allow_html=True)
 
 # تطبيق الوضع الليلي (اختياري)
