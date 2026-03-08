@@ -351,6 +351,10 @@ if st.session_state.dark_mode:
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
         }
+    }
+</style>
+""", unsafe_allow_html=True)
+    </style>
             ... (كل أكواد CSS السابقة) ...
 
     /* تأكيد ظهور النصوص في حقول الإدخال بالشريط الجانبي */
@@ -375,10 +379,6 @@ if st.session_state.dark_mode:
     [data-testid="stSidebar"] label,
     .stApp label {
         color: white !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-    </style>
     """, unsafe_allow_html=True)
 
 # --- HTML Component: مؤشر الصحة الدائري ---
