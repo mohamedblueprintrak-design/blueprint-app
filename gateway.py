@@ -1,6 +1,6 @@
 """
 BluePrint Engineering Consultancy - AI-Powered Engineering OS
-واجهة المستخدم الرئيسية (Streamlit) - الإصدار النهائي مع جميع التحسينات
+واجهة المستخدم الرئيسية (Streamlit) - الإصدار النهائي بالأزرق
 (Health Score, PWA, واتساب, رفع الملفات, السياق الذكي, تحسينات الموبايل)
 """
 
@@ -35,8 +35,6 @@ pwa_html = """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
 # ثوابت
-
-BACKEND = "https://blueprint-app-jrwp.onrender.com"
 BACKEND = "https://blueprint-app-jrwp.onrender.com"  # عدّل الرابط حسب خدمتك
 
 # تهيئة session state
@@ -77,7 +75,8 @@ def get_health_color(score):
     else:
         return "🔴"
 
-# CSS محسّن (عصري، متجاوب مع الموبايل)
+# CSS محسّن – ألوان زرقاء ونصوص واضحة
+st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
     @import url('https://cdn.jsdelivr.net/npm/lucide-static@0.400.0/font/lucide.css');
@@ -313,27 +312,6 @@ def get_health_color(score):
         }
     }
 </style>
-    
-    /* تحسينات الموبايل */
-    @media (max-width: 768px) {
-        .chat-message {
-            max-width: 90%;
-        }
-        .project-header h1 {
-            font-size: 1.8rem;
-        }
-        .metric-card {
-            margin-bottom: 1rem;
-        }
-        .stButton button {
-            width: 100%;
-        }
-        [data-testid="column"] {
-            width: 100% !important;
-            flex: unset !important;
-        }
-    }
-</style>
 """, unsafe_allow_html=True)
 
 # تطبيق الوضع الليلي
@@ -360,7 +338,7 @@ if st.session_state.dark_mode:
         .assistant-message {
             background: #2d2d2d;
             color: #ffffff;
-            border-left: 5px solid #667eea;
+            border-left: 5px solid #0b2b4f;
         }
         .stTextInput input, .stNumberInput input, .stSelectbox select {
             background: #3d3d3d;
@@ -369,8 +347,7 @@ if st.session_state.dark_mode:
         }
     </style>
     """, unsafe_allow_html=True)
-
-# الشريط الجانبي
+    # الشريط الجانبي
 with st.sidebar:
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -632,12 +609,11 @@ with st.sidebar:
                         st.success(_("✅ تمت إعادة الفهرسة بنجاح", "✅ Re-indexing completed successfully"))
     else:
         st.info(_("🔐 الرجاء تسجيل الدخول أولاً", "🔐 Please login first"))
-
-# المحتوى الرئيسي
+        # المحتوى الرئيسي
 if not st.session_state.token:
     st.markdown("""
     <div style="text-align: center; padding: 4rem 2rem;">
-        <h1 style="font-size: 4rem; color: #667eea;">🪄 BluePrint</h1>
+        <h1 style="font-size: 4rem; color: #0b2b4f;">🪄 BluePrint</h1>
         <h2 style="color: #4a5568; font-weight: 400;">Engineering Consultancy</h2>
         <p style="font-size: 1.2rem; color: #718096; margin-top: 2rem;">نظام تشغيل هندسي ذكي يعمل بالذكاء الاصطناعي</p>
         <div style="margin-top: 3rem;">
@@ -650,7 +626,7 @@ if not st.session_state.token:
 if not st.session_state.selected_project:
     st.markdown("""
     <div style="text-align: center; padding: 4rem 2rem;">
-        <h1 style="font-size: 3rem; color: #667eea;">👋 مرحباً بك</h1>
+        <h1 style="font-size: 3rem; color: #0b2b4f;">👋 مرحباً بك</h1>
         <p style="font-size: 1.2rem; color: #4a5568;">اختر مشروعاً من القائمة الجانبية أو أنشئ مشروعاً جديداً</p>
     </div>
     """, unsafe_allow_html=True)
@@ -759,7 +735,7 @@ with tabs[0]:
         fig = px.bar(df, x='desc', y='price', 
                      title=_('تكلفة بنود الحصر', 'BOQ Items Cost'),
                      labels={'desc': _('البند', 'Item'), 'price': _('السعر (جنيه)', 'Price (EGP)')},
-                     color_discrete_sequence=['#667eea'])
+                     color_discrete_sequence=['#0b2b4f'])
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
@@ -769,8 +745,7 @@ with tabs[0]:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info(_("📉 لا توجد بيانات حصر كافية لإنشاء رسم بياني", "📉 No BOQ data to display chart"))
-
-# ========== المحادثة مع Blue (مع رفع الملفات) ==========
+        # ========== المحادثة مع Blue (مع رفع الملفات) ==========
 with tabs[1]:
     st.markdown(f"## {_('💬 التحدث مع Blue', '💬 Chat with Blue')}")
     
@@ -929,8 +904,7 @@ with tabs[2]:
                             st.error(f"❌ فشل الإضافة: {r.status_code}")
                     except Exception as e:
                         st.error(f"❌ خطأ: {str(e)}")
-
-# ========== العيوب (مع زر مشاركة واتساب) ==========
+                        # ========== العيوب (مع زر مشاركة واتساب) ==========
 with tabs[3]:
     st.subheader(_("🔎 إدارة العيوب", "🔎 Defects Management"))
     
@@ -1058,8 +1032,7 @@ with tabs[3]:
             st.metric(_("عالية الخطورة", "High Severity"), len([d for d in defects if d['severity'] == "High"]))
     else:
         st.info(_("✨ لا توجد عيوب مسجلة. يمكنك إضافة عيب جديد من القسم أعلاه.", "✨ No defects recorded. Add a new defect from the section above."))
-
-# ========== الأرشيف ==========
+        # ========== الأرشيف ==========
 with tabs[4]:
     st.subheader(_("📚 سجل المشروع", "📚 Project Timeline"))
     timeline = data.get('timeline', [])
@@ -1202,7 +1175,7 @@ with tabs[6]:
         ### نسب خلط الخرسانة التقريبية (لكل متر مكعب)
         - **خرسانة عادية**: 300 كجم أسمنت + 0.8 م³ رمل + 1.2 م³ سن + ماء
         - **خرسانة مسلحة**: 350 كجم أسمنت + 0.6 م³ رمل + 1.2 م³ سن + ماء
-        - **خرسانة مقاومة**: 400 كجم أسمنت + 0.5 م³ رمل + 1.1 م³ سن + إضافات
+        - **خرسانة مقاومة**: 400 كجم أسمنт + 0.5 م³ رمل + 1.1 م³ سن + إضافات
         """)
     else:
         st.markdown("""
