@@ -1,6 +1,6 @@
 """
 BluePrint Engineering Consultancy - AI-Powered Engineering OS
-الواجهة النهائية - خلفية زرقاء متوسطة + شريط جانبي فاتح
+الواجهة النهائية - خلفية زرقاء متوسطة + شريط جانبي أزرق متناسق
 """
 
 import streamlit as st
@@ -72,7 +72,7 @@ def get_health_color(score):
     else:
         return "#ef4444"  # أحمر
 
-# --- CSS مخصص: خلفية زرقاء متوسطة + شريط جانبي فاتح ---
+# --- CSS مخصص: خلفية زرقاء متوسطة + شريط جانبي أزرق ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
@@ -92,21 +92,75 @@ st.markdown("""
         color: #f8fafc;  /* نص أبيض */
     }
 
-    /* الشريط الجانبي - فاتح جداً */
+    /* الشريط الجانبي - أزرق متناسق مع خلفية أغمق قليلاً */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
-        border-right: 1px solid #e2e8f0;
-        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.03);
-        color: #0b2b4f;  /* نص أزرق داكن */
+        background: linear-gradient(180deg, #0f2b4f 0%, #1e4a7a 100%);
+        border-right: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+        color: #ffffff;  /* نصوص بيضاء */
     }
     
-    [data-testid="stSidebar"] .stMarkdown, 
-    [data-testid="stSidebar"] .stText, 
-    [data-testid="stSidebar"] label {
-        color: #0b2b4f !important;
+    [data-testid="stSidebar"] .stMarkdown,
+    [data-testid="stSidebar"] .stText,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stNumberInput label {
+        color: #ffffff !important;
     }
 
-    /* البطاقات في المحتوى الرئيسي */
+    /* حقول الإدخال في الشريط الجانبي (خلفية شبه شفافة) */
+    [data-testid="stSidebar"] .stTextInput input,
+    [data-testid="stSidebar"] .stSelectbox select,
+    [data-testid="stSidebar"] .stNumberInput input {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 30px;
+        padding: 0.75rem 1rem;
+        color: white;
+    }
+    
+    [data-testid="stSidebar"] .stTextInput input::placeholder {
+        color: rgba(255, 255, 255, 0.7);
+    }
+    
+    [data-testid="stSidebar"] .stTextInput input:focus,
+    [data-testid="stSidebar"] .stSelectbox select:focus {
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
+    }
+
+    /* أزرار في الشريط الجانبي */
+    [data-testid="stSidebar"] .stButton > button {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        border-radius: 30px;
+        padding: 0.5rem 1.8rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: rgba(255, 255, 255, 0.3);
+        border-color: #38bdf8;
+    }
+
+    /* التبويبات في الشريط الجانبي */
+    [data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
+        background: transparent;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    [data-testid="stSidebar"] .stTabs [aria-selected="true"] {
+        color: #ffffff;
+        border-bottom: 2px solid #38bdf8;
+    }
+
+    /* بطاقات في المحتوى الرئيسي */
     .bp-card {
         background: rgba(255, 255, 255, 0.1);
         backdrop-filter: blur(8px);
@@ -125,18 +179,13 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.15);
     }
 
-    /* العناوين في المحتوى الرئيسي */
+    /* العناوين */
     .bp-header {
         font-size: 2.5rem;
         font-weight: 700;
         color: #ffffff;
         margin-bottom: 0.5rem;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-    }
-    
-    .bp-subheader {
-        color: #e2e8f0;
-        font-size: 1rem;
     }
 
     /* مؤشر الصحة الدائري */
@@ -174,8 +223,8 @@ st.markdown("""
         color: #ffffff;
     }
 
-    /* الأزرار */
-    .stButton > button {
+    /* أزرار في المحتوى الرئيسي */
+    .stApp .stButton > button {
         background: linear-gradient(90deg, #0ea5e9, #2563eb);
         color: white;
         border: none;
@@ -186,24 +235,9 @@ st.markdown("""
         transition: all 0.2s;
     }
     
-    .stButton > button:hover {
+    .stApp .stButton > button:hover {
         transform: translateY(-1px);
         box-shadow: 0 6px 15px rgba(14, 165, 233, 0.4);
-    }
-
-    /* حقول الإدخال (في الشريط الجانبي الفاتح) */
-    [data-testid="stSidebar"] .stTextInput input,
-    [data-testid="stSidebar"] .stSelectbox select,
-    [data-testid="stSidebar"] .stNumberInput input {
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        border-radius: 30px;
-        padding: 0.75rem 1rem;
-        color: #0b2b4f;
-    }
-    
-    [data-testid="stSidebar"] .stTextInput input::placeholder {
-        color: #64748b;
     }
 
     /* حقول الإدخال في المحتوى الرئيسي */
@@ -283,22 +317,6 @@ st.markdown("""
         letter-spacing: 0.5px;
     }
 
-    /* مربعات التحميل */
-    .upload-area {
-        border: 2px dashed #38bdf8;
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        background: rgba(255, 255, 255, 0.05);
-        transition: all 0.2s;
-        color: white;
-    }
-    
-    .upload-area:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: #2563eb;
-    }
-
     /* تحسينات الموبايل */
     @media (max-width: 768px) {
         .chat-message {
@@ -314,20 +332,10 @@ st.markdown("""
             width: 100%;
         }
     }
-
-    /* الوضع الليلي (اختياري) */
-    .dark-mode .stApp {
-        background-color: #0f172a;
-    }
-    .dark-mode .bp-card {
-        background: #1e293b;
-        border-color: #334155;
-        color: #e2e8f0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# تطبيق الوضع الليلي إذا كان مفعلاً
+# تطبيق الوضع الليلي (اختياري)
 if st.session_state.dark_mode:
     st.markdown("""
     <style>
@@ -340,8 +348,7 @@ if st.session_state.dark_mode:
             color: #e2e8f0;
         }
         [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-            color: #e2e8f0;
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
         }
     </style>
     """, unsafe_allow_html=True)
@@ -441,9 +448,9 @@ with st.sidebar:
     else:
         # معلومات المستخدم (في الشريط الجانبي)
         st.markdown(f"""
-        <div style="background: #e6f0fa; padding: 1rem; border-radius: 12px; margin-bottom: 1rem;">
-            <p style="color: #0b2b4f; font-weight: bold; margin:0;">👤 {st.session_state.user.get('full_name', 'User')}</p>
-            <small style="color: #1e4a7a;">{st.session_state.user.get('role', 'user')}</small>
+        <div style="background: rgba(255, 255, 255, 0.15); padding: 1rem; border-radius: 12px; margin-bottom: 1rem;">
+            <p style="color: white; font-weight: bold; margin:0;">👤 {st.session_state.user.get('full_name', 'User')}</p>
+            <small style="color: rgba(255, 255, 255, 0.8);">{st.session_state.user.get('role', 'user')}</small>
         </div>
         """, unsafe_allow_html=True)
         if st.button(_("🚪 تسجيل خروج", "🚪 Logout"), use_container_width=True):
