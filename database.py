@@ -7,7 +7,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 from passlib.context import CryptContext
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./engineering_os_v8.db"
+SQLALCHEMY_DATABASE_URL = "postgresql://blueprint:gUSE6ak6O9CTLP0T2mrfqw6aUSkZ6YCM@dpg-d6mgrkdm5p6s73fqfnjg-a/blueprint_db_2kv6"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
