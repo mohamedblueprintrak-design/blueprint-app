@@ -78,7 +78,6 @@ def get_health_color(score):
         return "🔴"
 
 # CSS محسّن (عصري، متجاوب مع الموبايل)
-st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
     @import url('https://cdn.jsdelivr.net/npm/lucide-static@0.400.0/font/lucide.css');
@@ -88,7 +87,7 @@ st.markdown("""
     }
     
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
         background-attachment: fixed;
     }
     
@@ -187,7 +186,7 @@ st.markdown("""
     }
     
     .user-message {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
         color: white;
         margin-left: auto;
         border-bottom-right-radius: 5px;
@@ -198,7 +197,7 @@ st.markdown("""
         color: #1e293b;
         margin-right: auto;
         border-bottom-left-radius: 5px;
-        border-left: 5px solid #667eea;
+        border-left: 5px solid #0b2b4f;
     }
     
     .assistant-message::before {
@@ -206,7 +205,7 @@ st.markdown("""
         display: block;
         font-size: 0.8rem;
         font-weight: 600;
-        color: #667eea;
+        color: #0b2b4f;
         margin-bottom: 0.5rem;
         text-transform: uppercase;
         letter-spacing: 1px;
@@ -214,7 +213,7 @@ st.markdown("""
     
     /* أزرار مخصصة */
     .stButton button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
         color: white;
         border: none;
         border-radius: 0.5rem;
@@ -254,8 +253,8 @@ st.markdown("""
     }
     
     .stTextInput input:focus, .stNumberInput input:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+        border-color: #0b2b4f !important;
+        box-shadow: 0 0 0 3px rgba(11, 43, 79, 0.1) !important;
     }
     
     /* تبويبات */
@@ -275,13 +274,13 @@ st.markdown("""
     }
     
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #0b2b4f 0%, #1b4f8b 100%);
         color: white !important;
     }
     
     /* مربعات التحميل */
     .upload-area {
-        border: 2px dashed #667eea;
+        border: 2px dashed #0b2b4f;
         border-radius: 0.5rem;
         padding: 2rem;
         text-align: center;
@@ -291,8 +290,29 @@ st.markdown("""
     
     .upload-area:hover {
         background: white;
-        border-color: #764ba2;
+        border-color: #1b4f8b;
     }
+    
+    /* تحسينات الموبايل */
+    @media (max-width: 768px) {
+        .chat-message {
+            max-width: 90%;
+        }
+        .project-header h1 {
+            font-size: 1.8rem;
+        }
+        .metric-card {
+            margin-bottom: 1rem;
+        }
+        .stButton button {
+            width: 100%;
+        }
+        [data-testid="column"] {
+            width: 100% !important;
+            flex: unset !important;
+        }
+    }
+</style>
     
     /* تحسينات الموبايل */
     @media (max-width: 768px) {
