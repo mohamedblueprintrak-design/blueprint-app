@@ -1,37 +1,37 @@
 import os
 import logging
+import shutil
 from typing import List, Dict, Any
 from pathlib import Path
 
-# استيراد مكتبات التعامل مع PDF والتقسيم
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain.docstore.document import Document
 
-# إعداد التسجيل
 logger = logging.getLogger("knowledge_retriever")
 
 class KnowledgeRetriever:
-    """نظام استرجاع المعرفة من ملفات PDF"""
+    """نظام استرجاع المعرفة من ملفات PDF باستخدام LangChain و ChromaDB"""
     
     def __init__(self, knowledge_base_dir: str = "knowledge_base", persist_directory: str = "chroma_db"):
         self.knowledge_base_dir = knowledge_base_dir
         self.persist_directory = persist_directory
-        self.vectorstore = None
         self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",  # نموذج يدعم العربية
+            model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",  # يدعم العربية
             model_kwargs={'device': 'cpu'},
             encode_kwargs={'normalize_embeddings': True}
         )
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,      # حجم القطعة (حوالي 500 كلمة)
-            chunk_overlap=50,    # تداخل بسيط بين القطع للحفاظ على السياق
+            chunk_size=1000,      # حجم القطعة (حوالي 1000 كلمة)
+            chunk_overlap=200,     # تداخل بين القطع لضمان استمرارية السياق
             separators=["\n\n", "\n", ".", " ", ""]
         )
+        self.vectorstore = None
         
     def index_pdfs(self):
-        """قراءة جميع ملفات PDF في المجلد وفهرستها"""
+        """فهرسة جميع ملفات PDF في مجلد knowledge_base"""
         pdf_files = list(Path(self.knowledge_base_dir).glob("*.pdf"))
         if not pdf_files:
             logger.warning("لا توجد ملفات PDF في المجلد %s", self.knowledge_base_dir)
@@ -40,28 +40,35 @@ class KnowledgeRetriever:
         all_documents = []
         for pdf_path in pdf_files:
             logger.info(f"جاري معالجة الملف: {pdf_path.name}")
-            loader = PyPDFLoader(str(pdf_path))
-            documents = loader.load()
-            
-            # إضافة معلومات المصدر (اسم الملف) إلى البيانات الوصفية لكل صفحة
-            for doc in documents:
-                doc.metadata["source_file"] = pdf_path.name
-                doc.metadata["source_page"] = doc.metadata.get("page", 0) + 1  # رقم الصفحة
-            
-            # تقسيم المستند إلى قطع أصغر
-            chunks = self.text_splitter.split_documents(documents)
-            all_documents.extend(chunks)
-            logger.info(f"تم تقسيم {pdf_path.name} إلى {len(chunks)} قطعة")
+            try:
+                loader = PyPDFLoader(str(pdf_path))
+                documents = loader.load()
+                
+                # إضافة معلومات المصدر (اسم الملف) إلى البيانات الوصفية
+                for doc in documents:
+                    doc.metadata["source"] = pdf_path.name
+                    doc.metadata["page"] = doc.metadata.get("page", 0) + 1  # رقم الصفحة
+                
+                # تقسيم المستند إلى قطع أصغر
+                chunks = self.text_splitter.split_documents(documents)
+                all_documents.extend(chunks)
+                logger.info(f"تم تقسيم {pdf_path.name} إلى {len(chunks)} قطعة")
+            except Exception as e:
+                logger.error(f"خطأ في معالجة {pdf_path.name}: {e}")
         
         # تخزين القطع في قاعدة بيانات متجهية
         if all_documents:
+            # إذا كان المجلد موجوداً، نحذفه أولاً لضمان فهرسة جديدة
+            if os.path.exists(self.persist_directory):
+                shutil.rmtree(self.persist_directory)
+            
             self.vectorstore = Chroma.from_documents(
                 documents=all_documents,
                 embedding=self.embeddings,
                 persist_directory=self.persist_directory
             )
             self.vectorstore.persist()
-            logger.info(f"تم فهرسة {len(all_documents)} قطعة معرفة")
+            logger.info(f"تم فهرسة {len(all_documents)} قطعة معرفة بنجاح")
         else:
             logger.warning("لم يتم استخراج أي نصوص من الملفات")
     
@@ -76,33 +83,28 @@ class KnowledgeRetriever:
             return True
         return False
     
-    def retrieve(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+    def retrieve(self, query: str, k: int = 5) -> List[Document]:
         """البحث عن أكثر القطع صلة بالسؤال"""
         if not self.vectorstore:
             if not self.load_index():
                 logger.error("لا يوجد فهرس معرفة. قم بتشغيل index_pdfs() أولاً")
                 return []
         
-        results = self.vectorstore.similarity_search_with_score(query, k=k)
-        retrieved = []
-        for doc, score in results:
-            retrieved.append({
-                "content": doc.page_content,
-                "source": doc.metadata.get("source_file", "غير معروف"),
-                "page": doc.metadata.get("source_page", "غير معروف"),
-                "score": score
-            })
-        return retrieved
+        # استخدام MMR (Maximum Marginal Relevance) للحصول على نتائج متنوعة
+        docs = self.vectorstore.max_marginal_relevance_search(query, k=k, fetch_k=20)
+        return docs
     
-    def format_context(self, retrieved_chunks: List[Dict[str, Any]]) -> str:
+    def format_context(self, docs: List[Document]) -> str:
         """تنسيق القطع المسترجعة لتكون سياقاً مقروءاً"""
-        if not retrieved_chunks:
+        if not docs:
             return ""
         
         context = "المعلومات التالية مأخوذة من المراجع الهندسية:\n\n"
-        for i, chunk in enumerate(retrieved_chunks, 1):
-            context += f"[{i}] من {chunk['source']} (صفحة {chunk['page']}):\n"
-            context += chunk['content'].strip() + "\n\n"
+        for i, doc in enumerate(docs, 1):
+            source = doc.metadata.get("source", "غير معروف")
+            page = doc.metadata.get("page", "غير معروف")
+            context += f"[{i}] من {source} (صفحة {page}):\n"
+            context += doc.page_content.strip() + "\n\n"
         return context
 
 # إنشاء كائن عام للاستخدام في التطبيق
