@@ -22,6 +22,14 @@ import redis
 import json
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+import gc # استيراد مكتبة تنظيف الذاكرة
+import sys
+import os
+
+# --- تفعيل تنظيف الذاكرة ---
+gc.enable() 
+# اختيارياً: ضبط تكرار التنظيف (بيخلي البرنامج ينظف الذاكرة كل شوية)
+gc.set_threshold(500, 10, 10)
 
 sys.stdout.reconfigure(encoding='utf-8')
 
