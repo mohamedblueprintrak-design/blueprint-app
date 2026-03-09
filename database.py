@@ -7,7 +7,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 from passlib.context import CryptContext
 
-SQLALCHEMY_DATABASE_URL = "postgresql://blueprint:gUSE6ak6O9CTLP0T2mrfqw6aUSkZ6YCM@dpg-d6mgrkdm5p6s73fqfnjg-a/blueprint_db_2kv6"
+import os
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://...")  # الرابط الافتراضي القديم اختياري
 # تعديل: استخدام متغير البيئة DATABASE_URL مع دعم كل من SQLite و PostgreSQL
 if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
     # PostgreSQL لا يحتاج connect_args
