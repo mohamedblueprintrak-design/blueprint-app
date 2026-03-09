@@ -13,6 +13,7 @@ ezdxf
 matplotlib
 reportlab
 arabic-reshaper
+python-bidi
 python-jose[cryptography]
 passlib[bcrypt]
 exifread
@@ -27,5 +28,4 @@ azure-keyvault-secrets
 python-multipart
 python-docx
 gunicorn
-psycopg2-binary==2.9.10
-langchain-huggingface==0.1.2
+psycopg2-binary
