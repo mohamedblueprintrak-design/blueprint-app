@@ -6,7 +6,8 @@ from pathlib import Path
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+# بدلاً من الموديل الافتراضي الكبير، استخدم هذا:
+self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 from langchain_community.vectorstores import Chroma
 from langchain.docstore.document import Document
 
