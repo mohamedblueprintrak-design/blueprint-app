@@ -4,12 +4,24 @@ import shutil
 from typing import List, Dict, Any
 from pathlib import Path
 
+# 1. الاستيراد المظبوط من المكتبة الجديدة
+from langchain_huggingface import HuggingFaceEmbeddings
+
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-# بدلاً من الموديل الافتراضي الكبير، استخدم هذا:
-self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 from langchain_community.vectorstores import Chroma
 from langchain.docstore.document import Document
+
+# 2. إعداد الـ Logger
+logger = logging.getLogger("knowledge_retriever")
+
+# 3. تعريف الكلاس أو الدالة اللي جواها الـ embeddings
+# (يجب أن يكون هذا السطر داخل دالة أو عند تهيئة الكلاس، وليس عائماً في الملف)
+def initialize_embeddings():
+    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+# إذا كنت تستخدم كلاس، ضعها داخل الـ __init__:
+# self.embeddings = initialize_embeddings()
 
 logger = logging.getLogger("knowledge_retriever")
 
