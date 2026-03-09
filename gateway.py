@@ -31,7 +31,7 @@ pwa_html = """
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
-BACKEND = "https://blueprint-app.onrender.com"  # سيتم تحديثه بعد النشر
+BACKEND = "https://blueprint-app-0bnl.onrender.com"  # سيتم تحديثه بعد النشر
 
 if "msgs" not in st.session_state:
     st.session_state.msgs = []
