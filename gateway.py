@@ -1,6 +1,6 @@
 """
 BluePrint Engineering Consultancy - AI-Powered Engineering OS
-الواجهة النهائية - حقول إدخال بيضاء بنص أسود
+الواجهة النهائية - خلفية زرقاء متوسطة + حقول بيضاء ونص أسود
 """
 
 import streamlit as st
@@ -14,7 +14,6 @@ import time
 import os
 import urllib.parse
 
-# إعدادات الصفحة
 st.set_page_config(
     page_title="BluePrint | Engineering Consultancy",
     page_icon="🪄",
@@ -22,7 +21,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# إضافة دعم PWA
 pwa_html = """
     <link rel="manifest" href="/static/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -33,10 +31,8 @@ pwa_html = """
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
-# ثوابت
-BACKEND = "https://blueprint-app-jrwp.onrender.com"  # عدّل الرابط حسب نشرتك
+BACKEND = "https://blueprint-app.onrender.com"  # سيتم تحديثه بعد النشر
 
-# تهيئة session state
 if "msgs" not in st.session_state:
     st.session_state.msgs = []
 if "selected_project" not in st.session_state:
@@ -50,7 +46,6 @@ if "token" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# دوال مساعدة
 def switch_lang():
     st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
     st.rerun()
@@ -63,36 +58,32 @@ def get_headers():
         return {"Authorization": f"Bearer {st.session_state.token}"}
     return {}
 
-# دالة للحصول على لون Health Score
 def get_health_color(score):
     if score >= 70:
-        return "#22c55e"  # أخضر
+        return "#22c55e"
     elif score >= 40:
-        return "#eab308"  # أصفر
+        return "#eab308"
     else:
-        return "#ef4444"  # أحمر
+        return "#ef4444"
 
-# --- CSS مخصص مع حقول إدخال بيضاء ونص أسود ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
     @import url('https://cdn.jsdelivr.net/npm/lucide-static@0.400.0/font/lucide.css');
 
-    /* الخلفية الرئيسية - أزرق متوسط */
     html, body, [class*="css"] {
         font-family: 'Cairo', sans-serif;
     }
     
     .stApp {
-        background-color: #1e4a7a;  /* أزرق متوسط */
+        background-color: #1e4a7a;
         background-image: 
             linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
             linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
         background-size: 30px 30px;
-        color: #f8fafc;  /* نص أبيض */
+        color: #f8fafc;
     }
 
-    /* الشريط الجانبي - أزرق متناسق */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0f2b4f 0%, #1e4a7a 100%);
         border-right: 1px solid rgba(255, 255, 255, 0.15);
@@ -100,7 +91,6 @@ st.markdown("""
         color: #ffffff;
     }
 
-    /* نصوص الشريط الجانبي (التسميات) */
     [data-testid="stSidebar"] .stMarkdown,
     [data-testid="stSidebar"] .stText,
     [data-testid="stSidebar"] label,
@@ -109,7 +99,6 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* حقول الإدخال في الشريط الجانبي (خلفية بيضاء، نص أسود) */
     [data-testid="stSidebar"] .stTextInput input,
     [data-testid="stSidebar"] .stSelectbox select,
     [data-testid="stSidebar"] .stNumberInput input {
@@ -121,10 +110,9 @@ st.markdown("""
     }
     
     [data-testid="stSidebar"] .stTextInput input::placeholder {
-        color: #6b7280;  /* رمادي فاتح للـ placeholder */
+        color: #6b7280;
     }
 
-    /* حقول الإدخال في المحتوى الرئيسي (إذا لزم الأمر) */
     .stApp .stTextInput input,
     .stApp .stSelectbox select,
     .stApp .stNumberInput input {
@@ -135,7 +123,6 @@ st.markdown("""
         padding: 0.75rem 1rem;
     }
 
-    /* أزرار في الشريط الجانبي */
     [data-testid="stSidebar"] .stButton > button {
         background: rgba(255, 255, 255, 0.2);
         border: 1px solid rgba(255, 255, 255, 0.3);
@@ -151,7 +138,6 @@ st.markdown("""
         border-color: #38bdf8;
     }
 
-    /* بطاقات في المحتوى الرئيسي */
     .bp-card {
         background: rgba(255, 255, 255, 0.1);
         backdrop-filter: blur(8px);
@@ -170,7 +156,6 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.15);
     }
 
-    /* العناوين */
     .bp-header {
         font-size: 2.5rem;
         font-weight: 700;
@@ -179,7 +164,6 @@ st.markdown("""
         text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
     }
 
-    /* مؤشر الصحة الدائري */
     .health-circle {
         position: relative;
         width: 140px;
@@ -214,7 +198,6 @@ st.markdown("""
         color: #ffffff;
     }
 
-    /* أزرار في المحتوى الرئيسي */
     .stApp .stButton > button {
         background: linear-gradient(90deg, #0ea5e9, #2563eb);
         color: white;
@@ -231,7 +214,6 @@ st.markdown("""
         box-shadow: 0 6px 15px rgba(14, 165, 233, 0.4);
     }
 
-    /* المحادثة */
     .stChatMessage {
         background: rgba(255, 255, 255, 0.1);
         border: 1px solid rgba(255, 255, 255, 0.2);
@@ -245,7 +227,6 @@ st.markdown("""
         background: #0ea5e9;
     }
 
-    /* تبويبات */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background: transparent;
@@ -266,7 +247,6 @@ st.markdown("""
         border-bottom: 2px solid #38bdf8;
     }
 
-    /* مؤشرات الأداء */
     .metric-icon {
         font-size: 1.8rem;
         color: #38bdf8;
@@ -287,23 +267,6 @@ st.markdown("""
         letter-spacing: 0.5px;
     }
 
-    /* مربعات التحميل */
-    .upload-area {
-        border: 2px dashed #38bdf8;
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        background: rgba(255, 255, 255, 0.05);
-        transition: all 0.2s;
-        color: white;
-    }
-    
-    .upload-area:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: #2563eb;
-    }
-
-    /* تحسينات الموبايل */
     @media (max-width: 768px) {
         .chat-message {
             max-width: 90%;
@@ -319,7 +282,6 @@ st.markdown("""
         }
     }
 
-    /* الوضع الليلي (اختياري) */
     .dark-mode .stApp {
         background-color: #0f172a;
     }
@@ -331,7 +293,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# تطبيق الوضع الليلي إذا كان مفعلاً
 if st.session_state.dark_mode:
     st.markdown("""
     <style>
@@ -349,13 +310,11 @@ if st.session_state.dark_mode:
     </style>
     """, unsafe_allow_html=True)
 
-# --- HTML Component: مؤشر الصحة الدائري ---
 def get_health_gauge(score):
     color = get_health_color(score)
     radius = 55
     circumference = 2 * 3.14159 * radius
     offset = circumference - (score / 100 * circumference)
-    
     return f"""
     <div class="health-circle">
         <svg width="140" height="140">
@@ -371,7 +330,6 @@ def get_health_gauge(score):
     """
     # --- الشريط الجانبي ---
 with st.sidebar:
-    # الشعار والاسم
     col1, col2 = st.columns([1, 3])
     with col1:
         if os.path.exists("logo.png"):
@@ -384,7 +342,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # زر تبديل اللغة والوضع الليلي (تم تعديلها لإزالة on_click)
     col_lang, col_dark = st.columns(2)
     with col_lang:
         if st.button("🇺🇸 EN" if st.session_state.language == "ar" else "🇸🇦 ع", key="lang_btn", use_container_width=True):
@@ -397,7 +354,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ---------- قسم المصادقة ----------
     if not st.session_state.token:
         st.markdown(f"### {_('🔐 تسجيل الدخول', '🔐 Login')}")
         tab1, tab2 = st.tabs([_("تسجيل دخول", "Login"), _("مستخدم جديد", "Register")])
@@ -444,7 +400,6 @@ with st.sidebar:
                         except Exception as e:
                             st.error(str(e))
     else:
-        # معلومات المستخدم
         st.markdown(f"""
         <div style="background: rgba(255, 255, 255, 0.15); padding: 1rem; border-radius: 12px; margin-bottom: 1rem;">
             <p style="color: white; font-weight: bold; margin:0;">👤 {st.session_state.user.get('full_name', 'User')}</p>
@@ -459,7 +414,6 @@ with st.sidebar:
 
         st.markdown("---")
         
-        # إنشاء مشروع جديد
         st.markdown(f"### 📁 {_('مشروع جديد', 'New Project')}")
         with st.form("new_project", clear_on_submit=True):
             name = st.text_input(_("اسم المشروع", "Project Name"), placeholder=_("مثال: برج الأندلس", "Example: Andalusia Tower"))
@@ -474,7 +428,6 @@ with st.sidebar:
         
         st.markdown("---")
         
-        # اختيار مشروع موجود
         st.markdown(f"### 📂 {_('المشاريع', 'Projects')}")
         try:
             projs = requests.get(f"{BACKEND}/projects", headers=get_headers()).json()
@@ -530,7 +483,6 @@ with st.sidebar:
                             st.session_state.selected_project = None
                             st.rerun()
             
-            # إعدادات المشروع
             with st.expander(_("⚙️ إعدادات المشروع", "⚙️ Project Settings")):
                 try:
                     settings_resp = requests.get(f"{BACKEND}/project_settings/{st.session_state.selected_project}", headers=get_headers())
@@ -558,22 +510,7 @@ with st.sidebar:
                                 st.success(_("✅ تم الحفظ", "✅ Saved"))
                         except:
                             st.error(_("❌ فشل الاتصال", "❌ Connection failed"))
-            
-            # إدارة قاعدة المعرفة (للمشرفين)
-            if st.session_state.user.get('role') == 'admin':
-                with st.expander(_("📚 إدارة المعرفة", "📚 Knowledge Base")):
-                    uploaded_files = st.file_uploader(_("اختر ملفات PDF", "Choose PDFs"), type=["pdf"], accept_multiple_files=True, key="kb_uploader")
-                    if uploaded_files and st.button(_("💾 رفع وفهرسة", "💾 Upload & Index")):
-                        import os
-                        os.makedirs("knowledge_base", exist_ok=True)
-                        for f in uploaded_files:
-                            with open(os.path.join("knowledge_base", f.name), "wb") as fp:
-                                fp.write(f.getvalue())
-                        st.success(_("✅ تم الرفع، جاري الفهرسة...", "✅ Uploaded, indexing..."))
-                        from knowledge_retriever import retriever
-                        retriever.index_pdfs()
-                        st.success(_("✅ تمت الفهرسة", "✅ Indexed"))
-                        # --- المحتوى الرئيسي ---
+                            # --- المحتوى الرئيسي ---
 if not st.session_state.token:
     st.markdown(f"""
     <div style="text-align: center; padding: 5rem;">
@@ -593,7 +530,6 @@ if not st.session_state.selected_project:
     """, unsafe_allow_html=True)
     st.stop()
 
-# جلب بيانات المشروع
 project_id = st.session_state.selected_project
 try:
     response = requests.get(f"{BACKEND}/project_data/{project_id}", headers=get_headers())
@@ -608,10 +544,8 @@ except Exception as e:
     st.error(f"❌ فشل في تحميل بيانات المشروع: {str(e)}")
     st.stop()
 
-# استخراج Health Score
 health_score = data.get('health_score', 50)
 
-# عرض رأس المشروع مع Health Score الدائري
 st.markdown(f"""
 <div class="bp-card" style="margin-bottom: 2rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -627,7 +561,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# المؤشرات الرئيسية (4 بطاقات)
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown(f"""
@@ -667,7 +600,6 @@ with col4:
 
 st.markdown("---")
 
-# تبويبات الواجهة (7 تبويبات)
 tab_names = [_("📊 لوحة المعلومات", "📊 Dashboard"),
              _("💬 المحادثة مع Blue", "💬 Chat with Blue"),
              _("📦 الحصر (BOQ)", "📦 BOQ"),
@@ -832,7 +764,6 @@ with tabs[3]:
     
     defects = data.get('defects', [])
     
-    # زر إضافة عيب جديد
     with st.expander(_("➕ إضافة عيب جديد", "➕ Add New Defect"), expanded=False):
         with st.form("add_defect_form"):
             new_desc = st.text_area(_("وصف العيب", "Defect Description"))
@@ -853,7 +784,6 @@ with tabs[3]:
                     st.warning(_("الرجاء إدخال وصف العيب", "Please enter description"))
     
     if defects:
-        # أزرار فلترة
         colf1, colf2, colf3, colf4 = st.columns(4)
         with colf1:
             filter_status = st.selectbox(_("فلترة حسب الحالة", "Filter by Status"), ["الكل", "Open", "Resolved"])
@@ -869,7 +799,6 @@ with tabs[3]:
                 report_text = "\n".join(report_lines)
                 st.download_button(label=_("⬇️ تحميل", "⬇️ Download"), data=report_text, file_name=f"defects_{project_id}.txt", mime="text/plain")
         
-        # تطبيق الفلترة
         filtered_defects = defects
         if filter_status != "الكل":
             filtered_defects = [d for d in filtered_defects if d['status'] == filter_status]
@@ -878,7 +807,6 @@ with tabs[3]:
         if search_term:
             filtered_defects = [d for d in filtered_defects if search_term.lower() in d['desc'].lower()]
         
-        # عرض العيوب
         for defect in filtered_defects:
             with st.container():
                 cols = st.columns([3, 1, 1, 1, 1, 1])
@@ -921,7 +849,6 @@ with tabs[3]:
                     st.markdown(f'<a href="{wa_link}" target="_blank"><button style="background: #25D366; color: white; border: none; border-radius: 30px; padding: 0.3rem 1rem; font-weight: 600;">📱 WhatsApp</button></a>', unsafe_allow_html=True)
                 st.markdown("---")
         
-        # إحصائيات
         st.markdown("---")
         st.markdown(f"### {_('إحصائيات', 'Statistics')}")
         colst1, colst2, colst3 = st.columns(3)
