@@ -1,6 +1,38 @@
 import re
+import json
+import logging
+from llm_provider import llm
+
+logger = logging.getLogger("classifier")
+
+async def classify_with_llm(text):
+    """استخدام LLM لتصنيف النص"""
+    prompt = f"""
+    أنت مساعد ذكي لتصنيف استفسارات المستخدم في نظام هندسي. قم بتحليل النص التالي وإرجاع JSON بالشكل التالي:
+    {{
+        "task": "beam_tool" أو "slab_tool" أو "column_tool" أو "foundation_tool" أو "retaining_wall_tool" أو "stair_tool" أو "checklist_tool" أو "site_report" أو "image_analysis" أو "pdf_analysis" أو "boq_tool" أو "ask_ai" أو "general_chat",
+        "domain": "design" أو "site" أو "boq" أو "office" أو "ai" أو "general"
+    }}
+    
+    النص: "{text}"
+    
+    المخرجات بصيغة JSON فقط.
+    """
+    try:
+        response = await llm.generate_text(prompt, model_preference=["gpt-4o-mini", "gemini-flash", "mistral-small"])
+        # استخراج JSON من الرد
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        else:
+            logger.warning("No JSON found in LLM response")
+            return None
+    except Exception as e:
+        logger.error(f"Error in classify_with_llm: {e}")
+        return None
 
 def classify_request(text=None, file_bytes=None, file_type=None):
+    # تصنيف الملفات أولاً
     if file_bytes and file_type:
         if "image" in file_type:
             return {"task": "image_analysis", "domain": "site"}
@@ -10,6 +42,18 @@ def classify_request(text=None, file_bytes=None, file_type=None):
     if not text:
         return {"task": "general_chat", "domain": "general"}
 
+    # محاولة التصنيف باستخدام LLM (إذا كان النص طويلاً أو غير واضح)
+    if len(text) > 15:
+        try:
+            import asyncio
+            llm_result = asyncio.run(classify_with_llm(text))
+            if llm_result and "task" in llm_result and "domain" in llm_result:
+                logger.info(f"LLM classification: {llm_result}")
+                return llm_result
+        except Exception as e:
+            logger.warning(f"LLM classification failed, falling back to rules: {e}")
+
+    # التصنيف بالقواعد (Fallback)
     t = text.lower()
 
     # أدوات الموقع
