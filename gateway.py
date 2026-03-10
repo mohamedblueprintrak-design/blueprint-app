@@ -1,18 +1,19 @@
 """
 BluePrint Engineering Consultancy - AI-Powered Engineering OS
-الواجهة النهائية - خلفية زرقاء متوسطة + حقول بيضاء ونص أسود
+الواجهة النهائية - جميع الوظائف + مهام المهندس + العملة + دائرة الصحة
 """
 
 import streamlit as st
 import requests
-import base64
 import json
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+import plotly.graph_objects as go
+from datetime import datetime, date
 import time
 import os
 import urllib.parse
+import tempfile
 
 st.set_page_config(
     page_title="BluePrint | Engineering Consultancy",
@@ -31,8 +32,9 @@ pwa_html = """
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
-BACKEND = "https://blueprint-app-0bnl.onrender.com"  # سيتم تحديثه بعد النشر
+BACKEND = "http://localhost:8000"  # غير الرابط حسب الحاجة
 
+# تهيئة Session State
 if "msgs" not in st.session_state:
     st.session_state.msgs = []
 if "selected_project" not in st.session_state:
@@ -45,12 +47,19 @@ if "token" not in st.session_state:
     st.session_state.token = None
 if "user" not in st.session_state:
     st.session_state.user = None
+if "currency" not in st.session_state:
+    st.session_state.currency = "EGP"
+if "tasks" not in st.session_state:
+    st.session_state.tasks = [
+        {"المهمة": "صب قواعد المحور A-G", "المسؤول": "م. أحمد", "التاريخ": "2026-03-15", "الأولوية": "عالية", "الحالة": "جاري"},
+        {"المهمة": "استلام حديد الأعمدة", "المسؤول": "م. سارة", "التاريخ": "2026-03-12", "الأولوية": "عالية", "الحالة": "متأخر"},
+    ]
 
 def switch_lang():
     st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
     st.rerun()
 
-def _(text_ar, text_en):
+def tr(text_ar, text_en):
     return text_ar if st.session_state.language == "ar" else text_en
 
 def get_headers():
@@ -66,10 +75,54 @@ def get_health_color(score):
     else:
         return "#ef4444"
 
+def get_health_gauge(score):
+    """إنشاء دائرة صحية باستخدام Plotly بألوان تتناسب مع السمة الزرقاء"""
+    color = get_health_color(score)
+    
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=score,
+        domain={'x': [0, 1], 'y': [0, 1]},
+        title={'text': tr("صحة المشروع", "Project Health"), 
+               'font': {'size': 14, 'color': 'white'}},
+        number={'font': {'color': 'white'}},
+        gauge={
+            'axis': {'range': [0, 100], 
+                     'tickwidth': 1, 
+                     'tickcolor': "white",
+                     'tickfont': {'color': 'white'}},
+            'bar': {'color': color},
+            'bgcolor': "rgba(0,0,0,0)",
+            'borderwidth': 2,
+            'bordercolor': "white",
+            'steps': [
+                {'range': [0, 40], 'color': 'rgba(239, 68, 68, 0.3)'},
+                {'range': [40, 70], 'color': 'rgba(234, 179, 8, 0.3)'},
+                {'range': [70, 100], 'color': 'rgba(34, 197, 94, 0.3)'}
+            ],
+        }
+    ))
+    
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={'color': "white", 'family': "Cairo"},
+        height=200,
+        margin=dict(l=20, r=20, t=50, b=20)
+    )
+    
+    return fig
+
+def format_currency(amount):
+    symbols = {"EGP": "جنيه", "AED": "درهم", "SAR": "ريال", "USD": "$", "EUR": "€"}
+    sym = symbols.get(st.session_state.currency, st.session_state.currency)
+    amt = f"{amount:,.0f}"
+    return f"{amt} {sym}" if st.session_state.language == "ar" else f"{sym} {amt}"
+
+# ========== CSS محسن (نصوص بيضاء، حقول إدخال سوداء) ==========
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
-    @import url('https://cdn.jsdelivr.net/npm/lucide-static@0.400.0/font/lucide.css');
 
     html, body, [class*="css"] {
         font-family: 'Cairo', sans-serif;
@@ -81,7 +134,7 @@ st.markdown("""
             linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
             linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
         background-size: 30px 30px;
-        color: #f8fafc;
+        color: #ffffff;
     }
 
     [data-testid="stSidebar"] {
@@ -164,89 +217,6 @@ st.markdown("""
         text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
     }
 
-    .health-circle {
-        position: relative;
-        width: 140px;
-        height: 140px;
-        margin: 0 auto;
-    }
-    
-    .health-circle svg {
-        transform: rotate(-90deg);
-    }
-    
-    .health-circle .circle-bg {
-        fill: none;
-        stroke: rgba(255, 255, 255, 0.2);
-        stroke-width: 8;
-    }
-    
-    .health-circle .circle-progress {
-        fill: none;
-        stroke-width: 8;
-        stroke-linecap: round;
-        transition: stroke-dashoffset 0.5s ease;
-    }
-    
-    .health-circle .percentage {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #ffffff;
-    }
-
-    .stApp .stButton > button {
-        background: linear-gradient(90deg, #0ea5e9, #2563eb);
-        color: white;
-        border: none;
-        border-radius: 30px;
-        padding: 0.5rem 1.8rem;
-        font-weight: 600;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-        transition: all 0.2s;
-    }
-    
-    .stApp .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 15px rgba(14, 165, 233, 0.4);
-    }
-
-    .stChatMessage {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 12px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        color: white;
-    }
-    
-    .stChatMessage [data-testid="stChatMessageAvatarAssistant"] {
-        background: #0ea5e9;
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: transparent;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: transparent;
-        color: rgba(255, 255, 255, 0.7);
-        font-weight: 500;
-        padding: 10px 20px;
-        border-radius: 8px 8px 0 0;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: rgba(255, 255, 255, 0.15);
-        color: #ffffff;
-        border-bottom: 2px solid #38bdf8;
-    }
-
     .metric-icon {
         font-size: 1.8rem;
         color: #38bdf8;
@@ -267,6 +237,72 @@ st.markdown("""
         letter-spacing: 0.5px;
     }
 
+    /* أزرار رئيسية */
+    .stApp .stButton > button {
+        background: linear-gradient(90deg, #0ea5e9, #2563eb);
+        color: white;
+        border: none;
+        border-radius: 30px;
+        padding: 0.5rem 1.8rem;
+        font-weight: 600;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        transition: all 0.2s;
+    }
+    
+    .stApp .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 15px rgba(14, 165, 233, 0.4);
+    }
+
+    /* تحسين المحادثة */
+    .stChatMessage {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        color: white;
+    }
+    
+    .stChatMessage [data-testid="stChatMessageAvatarAssistant"] {
+        background: #0ea5e9;
+    }
+
+    /* التبويبات */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: transparent;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 500;
+        padding: 10px 20px;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        border-bottom: 2px solid #38bdf8;
+    }
+
+    /* جداول البيانات */
+    .stDataFrame, .stTable {
+        color: white !important;
+    }
+    
+    .stDataFrame thead tr th {
+        background-color: #1e4a7a !important;
+        color: white !important;
+    }
+    
+    .stDataFrame tbody tr td {
+        color: white !important;
+    }
+
     @media (max-width: 768px) {
         .chat-message {
             max-width: 90%;
@@ -282,6 +318,7 @@ st.markdown("""
         }
     }
 
+    /* الوضع الداكن */
     .dark-mode .stApp {
         background-color: #0f172a;
     }
@@ -290,9 +327,13 @@ st.markdown("""
         border-color: #334155;
         color: #e2e8f0;
     }
+    .dark-mode [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+    }
 </style>
 """, unsafe_allow_html=True)
 
+# تطبيق الوضع الداكن إذا كان مفعلاً
 if st.session_state.dark_mode:
     st.markdown("""
     <style>
@@ -310,25 +351,7 @@ if st.session_state.dark_mode:
     </style>
     """, unsafe_allow_html=True)
 
-def get_health_gauge(score):
-    color = get_health_color(score)
-    radius = 55
-    circumference = 2 * 3.14159 * radius
-    offset = circumference - (score / 100 * circumference)
-    return f"""
-    <div class="health-circle">
-        <svg width="140" height="140">
-            <circle class="circle-bg" cx="70" cy="70" r="{radius}"></circle>
-            <circle class="circle-progress" cx="70" cy="70" r="{radius}"
-                stroke="{color}"
-                stroke-dasharray="{circumference}"
-                stroke-dashoffset="{offset}">
-            </circle>
-        </svg>
-        <div class="percentage">{score}%</div>
-    </div>
-    """
-    # --- الشريط الجانبي ---
+# ========== الشريط الجانبي ==========
 with st.sidebar:
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -355,48 +378,58 @@ with st.sidebar:
     st.markdown("---")
     
     if not st.session_state.token:
-        st.markdown(f"### {_('🔐 تسجيل الدخول', '🔐 Login')}")
-        tab1, tab2 = st.tabs([_("تسجيل دخول", "Login"), _("مستخدم جديد", "Register")])
+        st.markdown(f"### {tr('🔐 تسجيل الدخول', '🔐 Login')}")
+        tab1, tab2 = st.tabs([tr("تسجيل دخول", "Login"), tr("مستخدم جديد", "Register")])
         
         with tab1:
             with st.form("login_form"):
-                username = st.text_input(_("اسم المستخدم", "Username"))
-                password = st.text_input(_("كلمة المرور", "Password"), type="password")
-                if st.form_submit_button(_("دخول", "Login"), use_container_width=True):
+                username = st.text_input(tr("اسم المستخدم", "Username"))
+                password = st.text_input(tr("كلمة المرور", "Password"), type="password")
+                if st.form_submit_button(tr("دخول", "Login"), use_container_width=True):
                     try:
                         r = requests.post(f"{BACKEND}/token", data={"username": username, "password": password})
                         if r.ok:
-                            st.session_state.token = r.json()["access_token"]
-                            user_r = requests.get(f"{BACKEND}/users/me", headers=get_headers())
-                            if user_r.ok:
-                                st.session_state.user = user_r.json()
-                                st.success(_("✅ تم", "✅ OK"))
-                                st.rerun()
+                            data = r.json()
+                            if data.get("success"):
+                                st.session_state.token = data["data"]["access_token"]
+                                user_r = requests.get(f"{BACKEND}/users/me", headers=get_headers())
+                                if user_r.ok:
+                                    st.session_state.user = user_r.json().get("data")
+                                    st.success(tr("✅ تم", "✅ OK"))
+                                    st.rerun()
+                                else:
+                                    st.error(tr("❌ فشل جلب المستخدم", "❌ User fetch failed"))
                             else:
-                                st.error(_("❌ فشل جلب المستخدم", "❌ User fetch failed"))
+                                error_msg = data.get("error", {}).get("message", tr("❌ خطأ", "❌ Error"))
+                                st.error(f"❌ {error_msg}")
                         else:
-                            st.error(_("❌ اسم مستخدم أو كلمة مرور خطأ", "❌ Invalid credentials"))
+                            st.error(f"❌ فشل الاتصال (الحالة: {r.status_code})")
                     except Exception as e:
-                        st.error(f"❌ {str(e)}")
+                        st.error(str(e))
         
         with tab2:
             with st.form("register_form"):
-                new_u = st.text_input(_("اسم المستخدم", "Username"))
-                new_e = st.text_input(_("البريد", "Email"))
-                new_p = st.text_input(_("كلمة المرور", "Password"), type="password")
-                new_fn = st.text_input(_("الاسم الكامل", "Full Name"))
-                if st.form_submit_button(_("تسجيل", "Register"), use_container_width=True):
+                new_u = st.text_input(tr("اسم المستخدم", "Username"))
+                new_e = st.text_input(tr("البريد", "Email"))
+                new_p = st.text_input(tr("كلمة المرور", "Password"), type="password")
+                new_fn = st.text_input(tr("الاسم الكامل", "Full Name"))
+                if st.form_submit_button(tr("تسجيل", "Register"), use_container_width=True):
                     if len(new_p) > 72:
-                        st.error(_("كلمة المرور طويلة جداً", "Password too long"))
+                        st.error(tr("كلمة المرور طويلة جداً", "Password too long"))
                     else:
                         try:
                             r = requests.post(f"{BACKEND}/register", params={
                                 "username": new_u, "email": new_e, "password": new_p, "full_name": new_fn
                             })
                             if r.ok:
-                                st.success(_("✅ تم التسجيل", "✅ Registered"))
+                                data = r.json()
+                                if data.get("success"):
+                                    st.success(tr("✅ تم التسجيل", "✅ Registered"))
+                                else:
+                                    error_msg = data.get("error", {}).get("message", tr("❌ فشل", "❌ Failed"))
+                                    st.error(f"❌ {error_msg}")
                             else:
-                                st.error(r.json().get("detail", "❌ فشل"))
+                                st.error(f"❌ فشل الاتصال (الحالة: {r.status_code})")
                         except Exception as e:
                             st.error(str(e))
     else:
@@ -406,43 +439,56 @@ with st.sidebar:
             <small style="color: rgba(255, 255, 255, 0.8);">{st.session_state.user.get('role', 'user')}</small>
         </div>
         """, unsafe_allow_html=True)
-        if st.button(_("🚪 تسجيل خروج", "🚪 Logout"), use_container_width=True):
-            st.session_state.token = None
-            st.session_state.user = None
-            st.session_state.selected_project = None
+        if st.button(tr("🚪 تسجيل خروج", "🚪 Logout"), use_container_width=True):
+            for key in ["token", "user", "selected_project"]:
+                st.session_state[key] = None
             st.rerun()
 
         st.markdown("---")
         
-        st.markdown(f"### 📁 {_('مشروع جديد', 'New Project')}")
+        st.markdown(f"### 📁 {tr('مشروع جديد', 'New Project')}")
         with st.form("new_project", clear_on_submit=True):
-            name = st.text_input(_("اسم المشروع", "Project Name"), placeholder=_("مثال: برج الأندلس", "Example: Andalusia Tower"))
-            location = st.text_input(_("الموقع", "Location"), value="Cairo")
-            if st.form_submit_button(_("🚀 إنشاء", "🚀 Create"), use_container_width=True):
+            name = st.text_input(tr("اسم المشروع", "Project Name"), placeholder=tr("مثال: برج الأندلس", "Example: Andalusia Tower"))
+            location = st.text_input(tr("الموقع", "Location"), value="Cairo")
+            if st.form_submit_button(tr("🚀 إنشاء", "🚀 Create"), use_container_width=True):
                 if name:
                     r = requests.post(f"{BACKEND}/create_project", params={"name": name, "location": location}, headers=get_headers())
                     if r.ok:
-                        st.success(_("✅ تم الإنشاء", "✅ Created"))
-                        time.sleep(1)
-                        st.rerun()
+                        data = r.json()
+                        if data.get("success"):
+                            st.success(tr("✅ تم الإنشاء", "✅ Created"))
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(data.get("error", {}).get("message", "❌ فشل"))
+                    else:
+                        st.error(f"❌ {r.status_code}")
         
         st.markdown("---")
         
-        st.markdown(f"### 📂 {_('المشاريع', 'Projects')}")
+        st.markdown(f"### 📂 {tr('المشاريع', 'Projects')}")
         try:
-            projs = requests.get(f"{BACKEND}/projects", headers=get_headers()).json()
-            if projs:
-                proj_options = {f"{p['name']} - {p['location']}": p['id'] for p in projs}
-                selected_label = st.selectbox(_("اختر مشروع", "Select Project"), list(proj_options.keys()))
-                st.session_state.selected_project = proj_options[selected_label]
+            r = requests.get(f"{BACKEND}/projects", headers=get_headers())
+            if r.ok:
+                data = r.json()
+                if data.get("success"):
+                    projs = data["data"]
+                    if projs:
+                        proj_options = {f"{p['name']} - {p['location']}": p['id'] for p in projs}
+                        selected_label = st.selectbox(tr("اختر مشروع", "Select Project"), list(proj_options.keys()))
+                        st.session_state.selected_project = proj_options[selected_label]
+                    else:
+                        st.info(tr("✨ لا توجد مشاريع", "✨ No projects"))
+                else:
+                    st.error(data.get("error", {}).get("message", "❌ خطأ"))
             else:
-                st.info(_("✨ لا توجد مشاريع", "✨ No projects"))
+                st.error(f"❌ {r.status_code}")
         except Exception as e:
-            st.error(_("🔌 خطأ في الاتصال", "🔌 Connection error"))
+            st.error(tr("🔌 خطأ في الاتصال", "🔌 Connection error"))
         
         if st.session_state.selected_project:
             st.markdown("---")
-            st.markdown(f"### ⚙️ {_('الإجراءات', 'Actions')}")
+            st.markdown(f"### ⚙️ {tr('الإجراءات', 'Actions')}")
             col1, col2, col3 = st.columns(3)
             with col1:
                 if st.button("📄 PDF", key="btn_pdf", use_container_width=True):
@@ -450,7 +496,7 @@ with st.sidebar:
                         r = requests.get(f"{BACKEND}/export_pdf/{st.session_state.selected_project}", headers=get_headers())
                         if r.ok:
                             st.download_button(
-                                label=_("⬇️ تحميل", "⬇️ Download"),
+                                label=tr("⬇️ تحميل", "⬇️ Download"),
                                 data=r.content,
                                 file_name=f"report_{st.session_state.selected_project}.pdf",
                                 mime="application/pdf"
@@ -461,62 +507,86 @@ with st.sidebar:
                         st.error(str(e))
             with col2:
                 if st.button("📝 Word", key="btn_word", use_container_width=True):
-                    try:
-                        r = requests.get(f"{BACKEND}/export_word/{st.session_state.selected_project}", headers=get_headers())
-                        if r.ok:
-                            st.download_button(
-                                label=_("⬇️ تحميل", "⬇️ Download"),
-                                data=r.content,
-                                file_name=f"report_{st.session_state.selected_project}.docx",
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            )
-                        else:
-                            st.error(f"❌ {r.status_code}")
-                    except Exception as e:
-                        st.error(str(e))
+                    st.info(tr("ميزة Word قيد التطوير", "Word feature in development"))
             with col3:
                 if st.button("🗑️", key="btn_delete", use_container_width=True):
                     if st.session_state.selected_project:
-                        r = requests.delete(f"{BACKEND}/project/{st.session_state.selected_project}", headers=get_headers())
-                        if r.ok:
-                            st.success(_("✅ تم الحذف", "✅ Deleted"))
-                            st.session_state.selected_project = None
-                            st.rerun()
+                        if st.checkbox(tr("تأكيد الحذف", "Confirm delete")):
+                            r = requests.delete(f"{BACKEND}/project/{st.session_state.selected_project}", headers=get_headers())
+                            if r.ok:
+                                data = r.json()
+                                if data.get("success"):
+                                    st.success(tr("✅ تم الحذف", "✅ Deleted"))
+                                    st.session_state.selected_project = None
+                                    st.rerun()
+                                else:
+                                    st.error(data.get("error", {}).get("message", "❌ فشل"))
             
-            with st.expander(_("⚙️ إعدادات المشروع", "⚙️ Project Settings")):
+            with st.expander(tr("⚙️ إعدادات المشروع", "⚙️ Project Settings")):
                 try:
                     settings_resp = requests.get(f"{BACKEND}/project_settings/{st.session_state.selected_project}", headers=get_headers())
                     if settings_resp.ok:
-                        settings = settings_resp.json()
-                        conc_price = settings.get("concrete_price", 1000.0)
-                        steel_price = settings.get("steel_price", 35000.0)
-                        pref_model = settings.get("preferred_ai_model", "gemini")
+                        settings_data = settings_resp.json()
+                        if settings_data.get("success"):
+                            settings = settings_data["data"]
+                            conc_price = settings.get("concrete_price", 1000.0)
+                            steel_price = settings.get("steel_price", 35000.0)
+                            pref_model = settings.get("preferred_ai_model", "gemini")
+                        else:
+                            conc_price, steel_price, pref_model = 1000.0, 35000.0, "gemini"
                     else:
                         conc_price, steel_price, pref_model = 1000.0, 35000.0, "gemini"
                 except:
                     conc_price, steel_price, pref_model = 1000.0, 35000.0, "gemini"
 
                 with st.form("project_settings_form"):
-                    new_conc = st.number_input(_("سعر الخرسانة (جنيه/م³)", "Concrete price"), value=conc_price, step=50.0)
-                    new_steel = st.number_input(_("سعر الحديد (جنيه/طن)", "Steel price"), value=steel_price, step=500.0)
+                    new_conc = st.number_input(tr("سعر الخرسانة (جنيه/م³)", "Concrete price"), value=conc_price, step=50.0)
+                    new_steel = st.number_input(tr("سعر الحديد (جنيه/طن)", "Steel price"), value=steel_price, step=500.0)
+                    
+                    # اختيار العملة
+                    currency_options = ["EGP", "AED", "SAR", "USD", "EUR"]
+                    currency_labels = {
+                        "EGP": "🇪🇬 جنيه مصري",
+                        "AED": "🇦🇪 درهم إماراتي",
+                        "SAR": "🇸🇦 ريال سعودي",
+                        "USD": "🇺🇸 دولار أمريكي",
+                        "EUR": "🇪🇺 يورو"
+                    }
+                    selected_currency = st.selectbox(
+                        tr("العملة", "Currency"),
+                        currency_options,
+                        format_func=lambda x: currency_labels.get(x, x),
+                        index=currency_options.index(st.session_state.currency) if st.session_state.currency in currency_options else 0
+                    )
+                    
                     model_options = ["gemini", "gpt-4o", "deepseek", "grok", "mistral-small", "openrouter-llama32-3b", "openrouter-gemma3-4b", "openrouter-zai-glm", "huggingface-llama-3.2-3b"]
-                    new_model = st.selectbox(_("النموذج المفضل", "Preferred model"), model_options, index=model_options.index(pref_model) if pref_model in model_options else 0)
-                    if st.form_submit_button(_("💾 حفظ", "💾 Save")):
+                    new_model = st.selectbox(tr("النموذج المفضل", "Preferred model"), model_options, index=model_options.index(pref_model) if pref_model in model_options else 0)
+                    
+                    if st.form_submit_button(tr("💾 حفظ", "💾 Save")):
+                        st.session_state.currency = selected_currency
                         try:
                             r = requests.post(f"{BACKEND}/project_settings/{st.session_state.selected_project}",
                                               params={"concrete_price": new_conc, "steel_price": new_steel, "preferred_ai_model": new_model},
                                               headers=get_headers())
                             if r.ok:
-                                st.success(_("✅ تم الحفظ", "✅ Saved"))
+                                data = r.json()
+                                if data.get("success"):
+                                    st.success(tr("✅ تم الحفظ", "✅ Saved"))
+                                    st.rerun()
+                                else:
+                                    st.error(data.get("error", {}).get("message", "❌ فشل"))
+                            else:
+                                st.error(f"❌ {r.status_code}")
                         except:
-                            st.error(_("❌ فشل الاتصال", "❌ Connection failed"))
-                            # --- المحتوى الرئيسي ---
+                            st.error(tr("❌ فشل الاتصال", "❌ Connection failed"))
+
+# ========== المحتوى الرئيسي ==========
 if not st.session_state.token:
     st.markdown(f"""
     <div style="text-align: center; padding: 5rem;">
         <h1 class="bp-header">BluePrint</h1>
-        <h3 style="color: #e2e8f0; font-weight: 400;">{_('Engineering Consultancy', 'Engineering Consultancy')}</h3>
-        <p style="color: #cbd5e1; margin-top: 2rem;">{_('سجل الدخول للبدء', 'Login to start')}</p>
+        <h3 style="color: #e2e8f0; font-weight: 400;">{tr('Engineering Consultancy', 'Engineering Consultancy')}</h3>
+        <p style="color: #cbd5e1; margin-top: 2rem;">{tr('سجل الدخول للبدء', 'Login to start')}</p>
     </div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -524,50 +594,63 @@ if not st.session_state.token:
 if not st.session_state.selected_project:
     st.markdown(f"""
     <div style="text-align: center; padding: 5rem;">
-        <h1 class="bp-header" style="font-size: 3rem;">👋 {_('مرحباً', 'Welcome')}</h1>
-        <p style="color: #cbd5e1;">{_('اختر مشروعاً للبدء', 'Select a project to begin')}</p>
+        <h1 class="bp-header" style="font-size: 3rem;">👋 {tr('مرحباً', 'Welcome')}</h1>
+        <p style="color: #cbd5e1;">{tr('اختر مشروعاً للبدء', 'Select a project to begin')}</p>
     </div>
     """, unsafe_allow_html=True)
     st.stop()
 
+# جلب بيانات المشروع
+@st.cache_data(ttl=60)
+def fetch_project_data(pid, headers):
+    try:
+        r = requests.get(f"{BACKEND}/project_data/{pid}", headers=headers)
+        if r.ok:
+            data = r.json()
+            if data.get("success"):
+                return data["data"]
+    except:
+        pass
+    return None
+
 project_id = st.session_state.selected_project
-try:
-    response = requests.get(f"{BACKEND}/project_data/{project_id}", headers=get_headers())
-    if response.status_code != 200:
-        st.error(f"❌ خطأ من الخادم: {response.status_code}")
-        st.stop()
-    data = response.json()
-    if "error" in data:
-        st.error(data["error"])
-        st.stop()
-except Exception as e:
-    st.error(f"❌ فشل في تحميل بيانات المشروع: {str(e)}")
-    st.stop()
+data = fetch_project_data(project_id, get_headers())
+if data is None:
+    # بيانات تجريبية
+    data = {
+        "project_info": {"name": "مشروع تجريبي", "location": "القاهرة"},
+        "timeline": [],
+        "boq": {"items": [], "total_cost": 1250000},
+        "defects": [],
+        "files_count": 0,
+        "health_score": 85
+    }
 
 health_score = data.get('health_score', 50)
 
+# الهيدر الرئيسي
 st.markdown(f"""
 <div class="bp-card" style="margin-bottom: 2rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
         <div>
             <h1 class="bp-header" style="font-size: 2rem; margin:0;">🏗️ {data['project_info']['name']}</h1>
-            <p style="color: #e2e8f0;">📍 {data['project_info']['location']} | 🕒 {_('آخر تحديث', 'Last updated')}: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+            <p style="color: #e2e8f0;">📍 {data['project_info']['location']} | 🕒 {tr('آخر تحديث', 'Last updated')}: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
         </div>
-        <div style="text-align: center;">
-            {get_health_gauge(health_score)}
-            <p style="color: #e2e8f0; font-size: 0.8rem; margin-top: -10px;">{_('صحة المشروع', 'Project Health')}</p>
+        <div style="text-align: center; width: 200px;">
+            {st.plotly_chart(get_health_gauge(health_score), use_container_width=True)}
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
+# المؤشرات الأربعة
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown(f"""
     <div class="bp-card" style="text-align: center;">
         <div class="metric-icon">📊</div>
         <div class="metric-val">{len(data.get('timeline', []))}</div>
-        <div class="metric-label">{_('تحليلات', 'Analyses')}</div>
+        <div class="metric-label">{tr('تحليلات', 'Analyses')}</div>
     </div>
     """, unsafe_allow_html=True)
 with col2:
@@ -575,8 +658,8 @@ with col2:
     st.markdown(f"""
     <div class="bp-card" style="text-align: center;">
         <div class="metric-icon">💰</div>
-        <div class="metric-val">{total_cost:,.0f}</div>
-        <div class="metric-label">{_('جنيه', 'EGP')}</div>
+        <div class="metric-val">{format_currency(total_cost)}</div>
+        <div class="metric-label">{tr('الميزانية', 'Budget')}</div>
     </div>
     """, unsafe_allow_html=True)
 with col3:
@@ -585,7 +668,7 @@ with col3:
     <div class="bp-card" style="text-align: center;">
         <div class="metric-icon">⚠️</div>
         <div class="metric-val">{defects_count}</div>
-        <div class="metric-label">{_('عيوب', 'Defects')}</div>
+        <div class="metric-label">{tr('عيوب', 'Defects')}</div>
     </div>
     """, unsafe_allow_html=True)
 with col4:
@@ -594,59 +677,68 @@ with col4:
     <div class="bp-card" style="text-align: center;">
         <div class="metric-icon">📁</div>
         <div class="metric-val">{files_count}</div>
-        <div class="metric-label">{_('ملفات', 'Files')}</div>
+        <div class="metric-label">{tr('ملفات', 'Files')}</div>
     </div>
     """, unsafe_allow_html=True)
 
 st.markdown("---")
 
-tab_names = [_("📊 لوحة المعلومات", "📊 Dashboard"),
-             _("💬 المحادثة مع Blue", "💬 Chat with Blue"),
-             _("📦 الحصر (BOQ)", "📦 BOQ"),
-             _("🔍 العيوب", "🔍 Defects"),
-             _("📋 الأرشيف", "📋 Archive"),
-             _("📍 تقارير الموقع", "📍 Site Reports"),
-             _("📚 قاعدة معرفية", "📚 Knowledge Base")]
+# ========== التبويبات ==========
+tab_names = [
+    tr("📊 لوحة المعلومات", "📊 Dashboard"),
+    tr("💬 المحادثة مع Blue", "💬 Chat with Blue"),
+    tr("📦 الحصر (BOQ)", "📦 BOQ"),
+    tr("🔍 العيوب", "🔍 Defects"),
+    tr("📋 الأرشيف", "📋 Archive"),
+    tr("📍 تقارير الموقع", "📍 Site Reports"),
+    tr("📚 قاعدة معرفية", "📚 Knowledge Base"),
+    tr("📋 مهام المهندس", "📋 Tasks")
+]
 tabs = st.tabs(tab_names)
 
 # ========== لوحة المعلومات ==========
 with tabs[0]:
-    st.markdown(f"## {_('📈 نظرة عامة على المشروع', '📈 Project Overview')}")
+    st.markdown(f"## {tr('📈 نظرة عامة على المشروع', '📈 Project Overview')}")
     
     if data.get('boq', {}).get('items'):
         df = pd.DataFrame(data['boq']['items'])
         fig = px.bar(df, x='desc', y='price', 
-                     title=_('تكلفة بنود الحصر', 'BOQ Items Cost'),
-                     labels={'desc': _('البند', 'Item'), 'price': _('السعر (جنيه)', 'Price (EGP)')},
+                     title=tr('تكلفة بنود الحصر', 'BOQ Items Cost'),
+                     labels={'desc': tr('البند', 'Item'), 'price': tr('السعر', 'Price')},
                      color_discrete_sequence=['#38bdf8'])
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             font_family='Cairo',
+            font_color='white',
             title_font_size=20,
+            title_font_color='white',
+            xaxis=dict(tickfont=dict(color='white')),
+            yaxis=dict(tickfont=dict(color='white')),
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info(_("📉 لا توجد بيانات حصر كافية لإنشاء رسم بياني", "📉 No BOQ data"))
-        # ========== المحادثة مع Blue ==========
+        st.info(tr("📉 لا توجد بيانات حصر كافية لإنشاء رسم بياني", "📉 No BOQ data"))
+
+# ========== المحادثة مع Blue ==========
 with tabs[1]:
-    st.markdown(f"## {_('💬 التحدث مع Blue', '💬 Chat with Blue')}")
+    st.markdown(f"## {tr('💬 التحدث مع Blue', '💬 Chat with Blue')}")
     
     for msg in st.session_state.msgs:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
     
-    with st.expander(_("📎 رفع ملفات للتحليل", "📎 Upload files for analysis")):
+    with st.expander(tr("📎 رفع ملفات للتحليل", "📎 Upload files for analysis")):
         uploaded_files = st.file_uploader(
-            _("اختر صور أو ملفات PDF", "Choose images or PDF files"),
+            tr("اختر صور أو ملفات PDF", "Choose images or PDF files"),
             type=["jpg", "jpeg", "png", "pdf"],
             accept_multiple_files=True,
             key="chat_uploader"
         )
         if uploaded_files:
-            st.success(f"✅ {len(uploaded_files)} {_('ملف', 'file(s)')}")
+            st.success(f"✅ {len(uploaded_files)} {tr('ملف', 'file(s)')}")
     
-    prompt = st.chat_input(_("اكتب طلبك هنا...", "Type your message..."), key="chat_main")
+    prompt = st.chat_input(tr("اكتب طلبك هنا...", "Type your message..."), key="chat_main")
     
     if prompt or uploaded_files:
         if prompt:
@@ -655,7 +747,7 @@ with tabs[1]:
                 st.markdown(prompt)
         
         with st.chat_message("assistant"):
-            with st.spinner(_("Blue يفكر...", "Blue is thinking...")):
+            with st.spinner(tr("Blue يفكر...", "Blue is thinking...")):
                 try:
                     files = []
                     if uploaded_files:
@@ -674,15 +766,20 @@ with tabs[1]:
                     
                     if response.status_code == 200:
                         result = response.json()
-                        results_dict = result.get("results", {})
-                        if results_dict:
-                            first_key = list(results_dict.keys())[0]
-                            first_value = results_dict[first_key]
-                            reply = first_value if isinstance(first_value, str) else str(first_value)
+                        if result.get("success"):
+                            results_dict = result.get("data", {}).get("results", {})
+                            if results_dict:
+                                first_key = next(iter(results_dict.keys()))
+                                first_value = results_dict[first_key]
+                                reply = first_value if isinstance(first_value, str) else str(first_value)
+                            else:
+                                reply = tr("لم أفهم، حاول مرة أخرى.", "I didn't understand, please try again.")
+                            st.markdown(reply)
+                            st.session_state.msgs.append({"role": "assistant", "content": reply})
                         else:
-                            reply = "لم أفهم، حاول مرة أخرى."
-                        st.markdown(reply)
-                        st.session_state.msgs.append({"role": "assistant", "content": reply})
+                            error_msg = result.get("error", {}).get("message", "❌ خطأ")
+                            st.error(error_msg)
+                            st.session_state.msgs.append({"role": "assistant", "content": error_msg})
                     else:
                         error_msg = f"❌ خطأ من الخادم: {response.status_code}"
                         st.error(error_msg)
@@ -693,26 +790,30 @@ with tabs[1]:
 
 # ========== الحصر (BOQ) ==========
 with tabs[2]:
-    st.subheader(_("📋 جدول الكميات والتكاليف", "📋 Bill of Quantities"))
+    st.subheader(tr("📋 جدول الكميات والتكاليف", "📋 Bill of Quantities"))
     
     boq_items = data.get('boq', {}).get('items', [])
     if boq_items:
         df_boq = pd.DataFrame(boq_items)
-        st.dataframe(df_boq, use_container_width=True, hide_index=True,
-                     column_config={"desc": _("الوصف", "Description"),
-                                    "unit": _("الوحدة", "Unit"),
-                                    "qty": _("الكمية", "Quantity"),
-                                    "price": _("السعر (جنيه)", "Price (EGP)")})
-        st.markdown(f"### 💰 {_('الإجمالي التقديري', 'Estimated Total')}: **{data['boq']['total_cost']:,.2f} {_('جنيه', 'EGP')}**")
+        df_boq['price_display'] = df_boq['price'].apply(format_currency)
+        st.dataframe(df_boq[['desc', 'unit', 'qty', 'price_display']],
+                     use_container_width=True, hide_index=True,
+                     column_config={
+                         "desc": tr("الوصف", "Description"),
+                         "unit": tr("الوحدة", "Unit"),
+                         "qty": tr("الكمية", "Quantity"),
+                         "price_display": tr("السعر", "Price")
+                     })
+        st.markdown(f"### 💰 {tr('الإجمالي التقديري', 'Estimated Total')}: **{format_currency(data['boq']['total_cost'])}**")
         
         col_exp1, col_exp2 = st.columns([1, 5])
         with col_exp1:
-            if st.button(_("📥 تصدير Excel", "📥 Export Excel")):
+            if st.button(tr("📥 تصدير Excel", "📥 Export Excel")):
                 try:
                     excel_url = f"{BACKEND}/export_boq/{st.session_state.selected_project}"
                     r = requests.get(excel_url, headers=get_headers())
                     if r.ok:
-                        st.download_button(label=_("⬇️ تحميل", "⬇️ Download"), data=r.content,
+                        st.download_button(label=tr("⬇️ تحميل", "⬇️ Download"), data=r.content,
                                            file_name=f"boq_{st.session_state.selected_project}.xlsx",
                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                     else:
@@ -720,7 +821,7 @@ with tabs[2]:
                 except Exception as e:
                     st.error(f"❌ خطأ: {str(e)}")
         
-        with st.expander(_("🛠 إدارة البنود (حذف)", "🛠 Manage Items (Delete)")):
+        with st.expander(tr("🛠 إدارة البنود (حذف)", "🛠 Manage Items (Delete)")):
             for item in boq_items:
                 cols = st.columns([4, 1, 1, 1])
                 with cols[0]:
@@ -728,76 +829,90 @@ with tabs[2]:
                 with cols[1]:
                     st.write(f"{item['qty']} {item['unit']}")
                 with cols[2]:
-                    st.write(f"{item['price']} جنيه")
+                    st.write(format_currency(item['price']))
                 with cols[3]:
-                    if st.button(_("🗑️", "🗑️"), key=f"del_boq_{item['id']}"):
-                        try:
-                            r = requests.delete(f"{BACKEND}/boq/{item['id']}", headers=get_headers())
-                            if r.ok:
-                                st.success(_("✅ تم الحذف", "✅ Deleted"))
-                                st.rerun()
-                        except:
-                            st.error(_("❌ فشل", "❌ Failed"))
+                    if st.button(tr("🗑️", "🗑️"), key=f"del_boq_{item['id']}"):
+                        if st.checkbox(tr("تأكيد الحذف", "Confirm delete"), key=f"confirm_{item['id']}"):
+                            try:
+                                r = requests.delete(f"{BACKEND}/boq/{item['id']}", headers=get_headers())
+                                if r.ok:
+                                    data = r.json()
+                                    if data.get("success"):
+                                        st.success(tr("✅ تم الحذف", "✅ Deleted"))
+                                        st.rerun()
+                                    else:
+                                        st.error(data.get("error", {}).get("message", "❌ فشل"))
+                            except:
+                                st.error(tr("❌ فشل", "❌ Failed"))
     else:
-        st.info(_("📭 لا توجد كميات محصورة بعد.", "📭 No BOQ items yet."))
+        st.info(tr("📭 لا توجد كميات محصورة بعد.", "📭 No BOQ items yet."))
     
-    with st.expander(_("➕ إضافة بند حصر يدوي", "➕ Add Manual BOQ Item")):
+    with st.expander(tr("➕ إضافة بند حصر يدوي", "➕ Add Manual BOQ Item")):
         with st.form("manual_boq_form"):
-            desc = st.text_input(_("الوصف", "Description"))
-            unit = st.selectbox(_("الوحدة", "Unit"), ["م3", "طن", "م2", "عدد"])
-            qty = st.number_input(_("الكمية", "Quantity"), min_value=0.0, step=0.1)
-            price = st.number_input(_("السعر الإجمالي", "Total Price"), min_value=0.0, step=100.0)
-            if st.form_submit_button(_("💾 إضافة", "💾 Add")):
+            desc = st.text_input(tr("الوصف", "Description"))
+            unit = st.selectbox(tr("الوحدة", "Unit"), ["م3", "طن", "م2", "عدد"])
+            qty = st.number_input(tr("الكمية", "Quantity"), min_value=0.0, step=0.1)
+            price = st.number_input(tr("السعر الإجمالي", "Total Price"), min_value=0.0, step=100.0)
+            if st.form_submit_button(tr("💾 إضافة", "💾 Add")):
                 if desc:
                     try:
                         r = requests.post(f"{BACKEND}/add_boq/{project_id}", params={"desc": desc, "unit": unit, "qty": qty, "price": price}, headers=get_headers())
                         if r.ok:
-                            st.success(_("✅ تمت الإضافة", "✅ Added"))
-                            st.rerun()
+                            data = r.json()
+                            if data.get("success"):
+                                st.success(tr("✅ تمت الإضافة", "✅ Added"))
+                                st.rerun()
+                            else:
+                                st.error(data.get("error", {}).get("message", "❌ فشل الإضافة"))
                         else:
                             st.error(f"❌ فشل الإضافة: {r.status_code}")
                     except Exception as e:
                         st.error(f"❌ خطأ: {str(e)}")
-                        # ========== العيوب ==========
+
+# ========== العيوب ==========
 with tabs[3]:
-    st.subheader(_("🔎 إدارة العيوب", "🔎 Defects Management"))
+    st.subheader(tr("🔎 إدارة العيوب", "🔎 Defects Management"))
     
     defects = data.get('defects', [])
     
-    with st.expander(_("➕ إضافة عيب جديد", "➕ Add New Defect"), expanded=False):
+    with st.expander(tr("➕ إضافة عيب جديد", "➕ Add New Defect"), expanded=False):
         with st.form("add_defect_form"):
-            new_desc = st.text_area(_("وصف العيب", "Defect Description"))
-            new_sev = st.selectbox(_("الشدة", "Severity"), ["High", "Medium", "Low"])
-            new_stat = st.selectbox(_("الحالة", "Status"), ["Open", "Resolved"])
-            if st.form_submit_button(_("💾 إضافة", "💾 Add")):
+            new_desc = st.text_area(tr("وصف العيب", "Defect Description"))
+            new_sev = st.selectbox(tr("الشدة", "Severity"), ["High", "Medium", "Low"])
+            new_stat = st.selectbox(tr("الحالة", "Status"), ["Open", "Resolved"])
+            if st.form_submit_button(tr("💾 إضافة", "💾 Add")):
                 if new_desc:
                     try:
                         r = requests.post(f"{BACKEND}/add_defect/{project_id}", params={"description": new_desc, "severity": new_sev, "status": new_stat}, headers=get_headers())
                         if r.ok:
-                            st.success(_("✅ تمت الإضافة", "✅ Added"))
-                            st.rerun()
+                            data = r.json()
+                            if data.get("success"):
+                                st.success(tr("✅ تمت الإضافة", "✅ Added"))
+                                st.rerun()
+                            else:
+                                st.error(data.get("error", {}).get("message", "❌ فشل الإضافة"))
                         else:
                             st.error(f"❌ فشل الإضافة: {r.status_code}")
                     except Exception as e:
                         st.error(f"❌ خطأ: {str(e)}")
                 else:
-                    st.warning(_("الرجاء إدخال وصف العيب", "Please enter description"))
+                    st.warning(tr("الرجاء إدخال وصف العيب", "Please enter description"))
     
     if defects:
         colf1, colf2, colf3, colf4 = st.columns(4)
         with colf1:
-            filter_status = st.selectbox(_("فلترة حسب الحالة", "Filter by Status"), ["الكل", "Open", "Resolved"])
+            filter_status = st.selectbox(tr("فلترة حسب الحالة", "Filter by Status"), ["الكل", "Open", "Resolved"])
         with colf2:
-            filter_severity = st.selectbox(_("فلترة حسب الشدة", "Filter by Severity"), ["الكل", "High", "Medium", "Low"])
+            filter_severity = st.selectbox(tr("فلترة حسب الشدة", "Filter by Severity"), ["الكل", "High", "Medium", "Low"])
         with colf3:
-            search_term = st.text_input(_("بحث في الوصف", "Search in description"))
+            search_term = st.text_input(tr("بحث في الوصف", "Search in description"))
         with colf4:
-            if st.button(_("📥 تصدير التقرير", "📥 Export Report")):
+            if st.button(tr("📥 تصدير التقرير", "📥 Export Report")):
                 report_lines = ["تقرير العيوب", "="*30]
                 for d in defects:
                     report_lines.append(f"- {d['desc']} | {d['severity']} | {d['status']}")
                 report_text = "\n".join(report_lines)
-                st.download_button(label=_("⬇️ تحميل", "⬇️ Download"), data=report_text, file_name=f"defects_{project_id}.txt", mime="text/plain")
+                st.download_button(label=tr("⬇️ تحميل", "⬇️ Download"), data=report_text, file_name=f"defects_{project_id}.txt", mime="text/plain")
         
         filtered_defects = defects
         if filter_status != "الكل":
@@ -819,29 +934,37 @@ with tabs[3]:
                     status_icon = "✅" if defect['status'] == "Resolved" else "⏳"
                     st.markdown(f"{status_icon} {defect['status']}")
                 with cols[3]:
-                    with st.popover(_("✏️", "✏️")):
-                        st.markdown(f"**{_('تعديل العيب', 'Edit Defect')}**")
-                        new_desc = st.text_area(_("الوصف", "Description"), value=defect['desc'], key=f"desc_{defect['id']}")
-                        new_sev = st.selectbox(_("الشدة", "Severity"), ["High", "Medium", "Low"], index=["High","Medium","Low"].index(defect['severity']), key=f"sev_{defect['id']}")
-                        new_stat = st.selectbox(_("الحالة", "Status"), ["Open", "Resolved"], index=0 if defect['status']=="Open" else 1, key=f"stat_{defect['id']}")
-                        if st.button(_("💾 حفظ", "💾 Save"), key=f"save_{defect['id']}"):
+                    with st.popover(tr("✏️", "✏️")):
+                        st.markdown(f"**{tr('تعديل العيب', 'Edit Defect')}**")
+                        new_desc = st.text_area(tr("الوصف", "Description"), value=defect['desc'], key=f"desc_{defect['id']}")
+                        new_sev = st.selectbox(tr("الشدة", "Severity"), ["High", "Medium", "Low"], index=["High","Medium","Low"].index(defect['severity']), key=f"sev_{defect['id']}")
+                        new_stat = st.selectbox(tr("الحالة", "Status"), ["Open", "Resolved"], index=0 if defect['status']=="Open" else 1, key=f"stat_{defect['id']}")
+                        if st.button(tr("💾 حفظ", "💾 Save"), key=f"save_{defect['id']}"):
                             try:
                                 r = requests.put(f"{BACKEND}/defect/{defect['id']}", params={"description": new_desc, "severity": new_sev, "status": new_stat}, headers=get_headers())
                                 if r.ok:
-                                    st.success(_("✅ تم التحديث", "✅ Updated"))
-                                    st.rerun()
+                                    data = r.json()
+                                    if data.get("success"):
+                                        st.success(tr("✅ تم التحديث", "✅ Updated"))
+                                        st.rerun()
+                                    else:
+                                        st.error(data.get("error", {}).get("message", "❌ فشل"))
                             except:
-                                st.error(_("❌ فشل", "❌ Failed"))
+                                st.error(tr("❌ فشل", "❌ Failed"))
                 with cols[4]:
-                    if st.button(_("🗑️", "🗑️"), key=f"del_{defect['id']}"):
-                        if st.checkbox(_("تأكيد الحذف", "Confirm delete"), key=f"confirm_{defect['id']}"):
+                    if st.button(tr("🗑️", "🗑️"), key=f"del_{defect['id']}"):
+                        if st.checkbox(tr("تأكيد الحذف", "Confirm delete"), key=f"confirm_{defect['id']}"):
                             try:
                                 r = requests.delete(f"{BACKEND}/defect/{defect['id']}", headers=get_headers())
                                 if r.ok:
-                                    st.success(_("✅ تم الحذف", "✅ Deleted"))
-                                    st.rerun()
+                                    data = r.json()
+                                    if data.get("success"):
+                                        st.success(tr("✅ تم الحذف", "✅ Deleted"))
+                                        st.rerun()
+                                    else:
+                                        st.error(data.get("error", {}).get("message", "❌ فشل"))
                             except:
-                                st.error(_("❌ فشل", "❌ Failed"))
+                                st.error(tr("❌ فشل", "❌ Failed"))
                 with cols[5]:
                     share_text = f"عيب في مشروع {data['project_info']['name']}: {defect['desc']} (شدة: {defect['severity']})"
                     encoded_text = urllib.parse.quote(share_text)
@@ -850,32 +973,106 @@ with tabs[3]:
                 st.markdown("---")
         
         st.markdown("---")
-        st.markdown(f"### {_('إحصائيات', 'Statistics')}")
+        st.markdown(f"### {tr('إحصائيات', 'Statistics')}")
         colst1, colst2, colst3 = st.columns(3)
         with colst1:
-            st.metric(_("إجمالي العيوب", "Total Defects"), len(defects))
+            st.metric(tr("إجمالي العيوب", "Total Defects"), len(defects))
         with colst2:
-            st.metric(_("مفتوحة", "Open"), len([d for d in defects if d['status'] == "Open"]))
+            st.metric(tr("مفتوحة", "Open"), len([d for d in defects if d['status'] == "Open"]))
         with colst3:
-            st.metric(_("عالية الخطورة", "High Severity"), len([d for d in defects if d['severity'] == "High"]))
+            st.metric(tr("عالية الخطورة", "High Severity"), len([d for d in defects if d['severity'] == "High"]))
     else:
-        st.info(_("✨ لا توجد عيوب مسجلة.", "✨ No defects recorded."))
-        # ========== الأرشيف ==========
+        st.info(tr("✨ لا توجد عيوب مسجلة.", "✨ No defects recorded."))
+
+# ========== الأرشيف ==========
 with tabs[4]:
-    st.subheader(_("📚 سجل المشروع", "📚 Project Timeline"))
+    st.subheader(tr("📚 سجل المشروع", "📚 Project Timeline"))
     timeline = data.get('timeline', [])
     if timeline:
         for item in timeline:
             with st.expander(f"**{item.get('task')}** - {item.get('date')}"):
                 st.json(item)
     else:
-        st.info(_("📭 لا يوجد سجل بعد.", "📭 No timeline yet."))
+        st.info(tr("📭 لا يوجد سجل بعد.", "📭 No timeline yet."))
 
 # ========== تقارير الموقع ==========
 with tabs[5]:
-    st.subheader(_("📍 تقارير الموقع", "📍 Site Reports"))
+    st.subheader(tr("📍 تقارير الموقع", "📍 Site Reports"))
     
-    if st.button(_("📍 استخدم موقعي الحالي", "📍 Use my current location"), key="location_btn"):
+    # -------------------- قسم إنشاء التقرير اليومي PDF --------------------
+    with st.expander(tr("📄 إنشاء تقرير يومي PDF", "📄 Create Daily PDF Report"), expanded=False):
+        with st.form("daily_pdf_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                report_date = st.date_input(tr("التاريخ", "Date"), value=datetime.now())
+                location_name = st.text_input(tr("اسم الموقع", "Location Name"), value=tr("الطابق الأرضي", "Ground Floor"))
+                weather = st.selectbox(tr("الحالة الجوية", "Weather"), ["مشمس", "غائم", "ممطر", "عاصف"])
+            with col2:
+                workers_count = st.number_input(tr("عدد العمال", "Workers Count"), min_value=0, value=10, step=1)
+                equipment = st.text_area(tr("المعدات المستخدمة", "Equipment Used"), value="خلاطة, هزاز, طلمبة")
+                notes = st.text_area(tr("ملاحظات", "Notes"), value="تم صب القواعد بنجاح")
+            
+            uploaded_images = st.file_uploader(tr("صور الموقع (اختياري)", "Site Images (optional)"), 
+                                               type=["jpg", "jpeg", "png"], 
+                                               accept_multiple_files=True, 
+                                               key="daily_pdf_images")
+            
+            generate_clicked = st.form_submit_button(tr("📥 إنشاء التقرير", "📥 Generate Report"))
+        
+        # خارج الـ form: معالجة النتيجة وعرض زر التحميل
+        if generate_clicked:
+            with st.spinner(tr("جاري إنشاء التقرير...", "Generating report...")):
+                # حفظ الصور مؤقتاً
+                temp_image_paths = []
+                if uploaded_images:
+                    for img in uploaded_images:
+                        temp_path = os.path.join(tempfile.gettempdir(), img.name)
+                        with open(temp_path, "wb") as f:
+                            f.write(img.getbuffer())
+                        temp_image_paths.append(temp_path)
+                
+                report_data = {
+                    "date": report_date.strftime("%Y-%m-%d"),
+                    "location_name": location_name,
+                    "weather": weather,
+                    "workers_count": workers_count,
+                    "equipment": equipment,
+                    "notes": notes,
+                    "images": temp_image_paths
+                }
+                
+                try:
+                    from pdf_generator import generate_daily_report
+                    pdf_bytes = generate_daily_report(project_id, report_data)
+                    
+                    if pdf_bytes:
+                        # تخزين PDF في session_state
+                        st.session_state["generated_pdf"] = pdf_bytes
+                        st.session_state["generated_pdf_name"] = f"daily_report_{project_id}_{report_date}.pdf"
+                        st.success(tr("✅ تم إنشاء التقرير بنجاح", "✅ Report generated successfully"))
+                    else:
+                        st.error(tr("❌ فشل إنشاء التقرير", "❌ Failed to generate report"))
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+        
+        # عرض زر التحميل إذا كان هناك PDF في session_state
+        if "generated_pdf" in st.session_state and st.session_state["generated_pdf"] is not None:
+            st.download_button(
+                label=tr("⬇️ تحميل التقرير", "⬇️ Download Report"),
+                data=st.session_state["generated_pdf"],
+                file_name=st.session_state["generated_pdf_name"],
+                mime="application/pdf",
+                key="download_pdf_btn"
+            )
+            # اختياري: زر لمسح التقرير من الذاكرة
+            if st.button(tr("مسح التقرير من الذاكرة", "Clear report from memory")):
+                st.session_state["generated_pdf"] = None
+                st.rerun()
+    
+    st.markdown("---")
+    
+    # -------------------- زر الحصول على الموقع الحالي --------------------
+    if st.button(tr("📍 استخدم موقعي الحالي", "📍 Use my current location"), key="location_btn"):
         st.markdown("""
         <script>
         navigator.geolocation.getCurrentPosition(
@@ -892,7 +1089,7 @@ with tabs[5]:
         );
         </script>
         """, unsafe_allow_html=True)
-        st.info(_("جارٍ الحصول على موقعك... قد تحتاج للسماح بالوصول.", "Getting location..."))
+        st.info(tr("جارٍ الحصول على موقعك... قد تحتاج للسماح بالوصول.", "Getting location..."))
     
     default_lat = 0.0
     default_lon = 0.0
@@ -901,18 +1098,19 @@ with tabs[5]:
     if 'site_lon' in st.session_state:
         default_lon = st.session_state.site_lon
 
-    with st.expander(_("➕ إضافة تقرير جديد", "➕ Add New Report"), expanded=True):
+    # -------------------- نموذج إضافة زيارة موقع (تخزين في قاعدة البيانات) --------------------
+    with st.expander(tr("➕ إضافة تقرير موقع جديد (للحفظ)", "➕ Add New Site Report (to save)"), expanded=True):
         with st.form("site_visit_form"):
-            loc_name = st.text_input(_("اسم الموقع", "Location Name"), placeholder=_("مثال: الطابق الثالث", "Example: 3rd Floor"))
+            loc_name = st.text_input(tr("اسم الموقع", "Location Name"), placeholder=tr("مثال: الطابق الثالث", "Example: 3rd Floor"))
             col1, col2 = st.columns(2)
             with col1:
-                lat_input = st.number_input(_("خط العرض", "Latitude"), format="%.6f", value=default_lat, key="lat_input")
+                lat_input = st.number_input(tr("خط العرض", "Latitude"), format="%.6f", value=default_lat, key="lat_input")
             with col2:
-                lon_input = st.number_input(_("خط الطول", "Longitude"), format="%.6f", value=default_lon, key="lon_input")
-            notes = st.text_area(_("ملاحظات", "Notes"))
-            uploaded_images = st.file_uploader(_("صور الموقع", "Site Images"), type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="site_images")
+                lon_input = st.number_input(tr("خط الطول", "Longitude"), format="%.6f", value=default_lon, key="lon_input")
+            notes = st.text_area(tr("ملاحظات", "Notes"))
+            uploaded_images = st.file_uploader(tr("صور الموقع", "Site Images"), type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="site_images")
             
-            if st.form_submit_button(_("💾 حفظ التقرير", "💾 Save Report")):
+            if st.form_submit_button(tr("💾 حفظ التقرير", "💾 Save Report")):
                 files_to_send = []
                 if uploaded_images:
                     for img in uploaded_images:
@@ -928,42 +1126,57 @@ with tabs[5]:
                 try:
                     r = requests.post(f"{BACKEND}/upload_site_visit/{project_id}", data=data, files=files_to_send if files_to_send else None, headers=get_headers())
                     if r.ok:
-                        st.success(_("✅ تم حفظ التقرير", "✅ Report saved"))
-                        st.rerun()
+                        resp_data = r.json()
+                        if resp_data.get("success"):
+                            st.success(tr("✅ تم حفظ التقرير", "✅ Report saved"))
+                            st.rerun()
+                        else:
+                            st.error(resp_data.get("error", {}).get("message", "❌ فشل الحفظ"))
                     else:
                         st.error(f"❌ فشل الحفظ: {r.status_code}")
                 except Exception as e:
                     st.error(f"❌ خطأ: {str(e)}")
     
     st.markdown("---")
-    st.subheader(_("📋 التقارير السابقة", "📋 Previous Reports"))
+    st.subheader(tr("📋 التقارير السابقة", "📋 Previous Reports"))
     
+    # -------------------- عرض الزيارات السابقة --------------------
     try:
         visits_resp = requests.get(f"{BACKEND}/site_visits/{project_id}", headers=get_headers())
         if visits_resp.ok:
-            visits = visits_resp.json()
-            if not visits:
-                st.info(_("لا توجد تقارير بعد", "No reports yet"))
-            for visit in visits:
-                with st.container():
-                    st.markdown(f"**{visit.get('location_name', _('بدون موقع', 'No location'))}** - {visit['visit_date'][:16]}")
-                    if visit.get('notes'):
-                        st.caption(visit['notes'])
-                    if visit.get('images'):
-                        st.image([img['path'] for img in visit['images']], width=150, caption=[img['caption'] for img in visit['images']])
-                    st.markdown("---")
+            data_visits = visits_resp.json()
+            if data_visits.get("success"):
+                visits = data_visits["data"]
+                if not visits:
+                    st.info(tr("لا توجد تقارير بعد", "No reports yet"))
+                for visit in visits:
+                    with st.container():
+                        st.markdown(f"**{visit.get('location_name', tr('بدون موقع', 'No location'))}** - {visit['visit_date'][:16]}")
+                        if visit.get('notes'):
+                            st.caption(visit['notes'])
+                        if visit.get('images'):
+                            # عرض الصور مع إمكانية التكبير
+                            for img in visit['images']:
+                                st.image(img['path'], width=150, caption=img.get('caption', ''))
+                        st.markdown("---")
+            else:
+                st.error(data_visits.get("error", {}).get("message", "❌ خطأ"))
+        else:
+            st.error(f"❌ {visits_resp.status_code}")
     except Exception as e:
         st.error(f"❌ {str(e)}")
 
 # ========== قاعدة معرفية ==========
 with tabs[6]:
-    st.subheader(_("📚 القاعدة المعرفية الهندسية", "📚 Engineering Knowledge Base"))
+    st.subheader(tr("📚 القاعدة المعرفية الهندسية", "📚 Engineering Knowledge Base"))
     
-    kb_options = [_("معادلات إنشائية", "Structural Formulas"),
-                  _("كودات البناء", "Building Codes"),
-                  _("نسب الخلط", "Mix Ratios"),
-                  _("أسئلة شائعة", "FAQs")]
-    choice = st.radio(_("اختر الموضوع", "Choose topic"), kb_options, horizontal=True, key="kb_radio")
+    kb_options = [
+        tr("معادلات إنشائية", "Structural Formulas"),
+        tr("كودات البناء", "Building Codes"),
+        tr("نسب الخلط", "Mix Ratios"),
+        tr("أسئلة شائعة", "FAQs")
+    ]
+    choice = st.radio(tr("اختر الموضوع", "Choose topic"), kb_options, horizontal=True, key="kb_radio")
     
     if choice == kb_options[0]:
         st.markdown("""
@@ -988,17 +1201,53 @@ with tabs[6]:
         """)
     
     st.markdown("---")
-    st.markdown(_("🔍 **ابحث في القاعدة المعرفية**", "🔍 **Search Knowledge Base**"))
-    kb_query = st.text_input(_("اكتب سؤالك هنا", "Type your question here"), key="kb_query")
+    st.markdown(tr("🔍 **ابحث في القاعدة المعرفية**", "🔍 **Search Knowledge Base**"))
+    kb_query = st.text_input(tr("اكتب سؤالك هنا", "Type your question here"), key="kb_query")
     if kb_query:
-        with st.spinner(_("Blue يبحث...", "Blue is searching...")):
+        with st.spinner(tr("Blue يبحث...", "Blue is searching...")):
             try:
                 r = requests.post(f"{BACKEND}/process", data={"message": kb_query, "project_id": project_id, "history": "[]"}, headers=get_headers())
                 if r.ok:
                     res = r.json()
-                    answer = res.get("results", {}).get("💻 Blue", "لم أجد إجابة")
-                    st.success(answer)
+                    if res.get("success"):
+                        answer = res.get("data", {}).get("results", {}).get("💻 Blue", tr("لم أجد إجابة", "No answer found"))
+                        st.success(answer)
+                    else:
+                        st.error(res.get("error", {}).get("message", "❌ خطأ"))
                 else:
-                    st.error(_("❌ فشل الاتصال", "❌ Connection failed"))
+                    st.error(tr("❌ فشل الاتصال", "❌ Connection failed"))
             except Exception as e:
                 st.error(f"⚠️ {str(e)}")
+
+# ========== مهام المهندس (Tasks) ==========
+with tabs[7]:
+    st.subheader(tr("📋 إدارة مهام المهندسين", "📋 Engineer Tasks"))
+    
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        with st.form("task_form"):
+            t_desc = st.text_input(tr("وصف المهمة", "Task description"))
+            t_ass = st.selectbox(tr("المهندس", "Engineer"), ["م. أحمد", "م. سارة", "م. خالد"])
+            t_date = st.date_input(tr("تاريخ التسليم", "Deadline"), date.today())
+            t_prio = st.select_slider(tr("الأولوية", "Priority"), options=["منخفضة", "متوسطة", "عالية"])
+            if st.form_submit_button(tr("➕ إضافة مهمة", "➕ Add task")):
+                st.session_state.tasks.append({
+                    "المهمة": t_desc,
+                    "المسؤول": t_ass,
+                    "التاريخ": t_date.strftime("%Y-%m-%d"),
+                    "الأولوية": t_prio,
+                    "الحالة": "قيد الانتظار"
+                })
+                st.success(tr("✅ تمت الإضافة", "✅ Added"))
+                st.rerun()
+    
+    with col2:
+        if st.session_state.tasks:
+            df_tasks = pd.DataFrame(st.session_state.tasks)
+            st.table(df_tasks)
+        else:
+            st.info(tr("لا توجد مهام", "No tasks"))
+
+# تذييل الصفحة
+st.markdown("<br><hr style='border-color:#334155;'><center style='color: #cbd5e1;'>BluePrint AI v3.0 | 2026</center>", unsafe_allow_html=True)
