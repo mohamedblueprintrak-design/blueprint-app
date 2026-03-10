@@ -57,7 +57,7 @@ class VisionAgent:
         """
         return await llm.analyze_image(image_base64, prompt)
 
-# --- 3. وكيل التقارير والمنطق ---
+# --- 3. وكيل التقارير والمنطق (مع تفعيل الذاكرة) ---
 class ReasoningAgent:
     def __init__(self):
         self.name = "Blue-Logic"
@@ -71,10 +71,29 @@ class ReasoningAgent:
         return await llm.generate_text(prompt, model_preference=["deepseek", "gpt-4o", "gemini"])
 
     async def chat(self, text, history=None, project_id=None):
-        full_prompt = text
+        # جلب الذاكرة الخاصة بالمشروع
+        memory_context = ""
+        if project_id:
+            try:
+                db = SessionLocal()
+                memories = db.query(MemoryEntry).filter(
+                    MemoryEntry.project_id == project_id,
+                    MemoryEntry.entry_type == 'chat'
+                ).order_by(MemoryEntry.created_at.desc()).limit(5).all()
+                
+                if memories:
+                    memory_lines = []
+                    for m in memories:
+                        memory_lines.append(f"{m.created_at.strftime('%Y-%m-%d')}: {m.content[:100]}")
+                    memory_context = "ذكريات سابقة من هذا المشروع:\n" + "\n".join(memory_lines) + "\n\n"
+                db.close()
+            except Exception as e:
+                logger.warning(f"Could not fetch memory: {e}")
+
+        full_prompt = memory_context + text
         if history:
             context = "\n".join([f"{m['role']}: {m['content']}" for m in history[-3:]])
-            full_prompt = f"Context of conversation:\n{context}\n\nUser: {text}\nAssistant:"
+            full_prompt = f"Context of conversation:\n{context}\n\n{memory_context}User: {text}\nAssistant:"
 
         preferred_model = "gemini"
         if project_id:
@@ -108,7 +127,8 @@ class ReasoningAgent:
 
         response = await llm.generate_text(full_prompt, model_preference=unique_models)
         
-        if project_id and len(text) > 10:
+        # حفظ المحادثة في الذاكرة
+        if project_id and len(text) > 5:
             try:
                 db = SessionLocal()
                 memory = MemoryEntry(
@@ -121,8 +141,8 @@ class ReasoningAgent:
                 db.add(memory)
                 db.commit()
                 db.close()
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Could not save memory: {e}")
         
         return response
 
