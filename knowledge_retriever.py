@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import List, Optional
 
-# استخدام langchain_community بدلاً من langchain_huggingface
+# استخدام langchain_community
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -24,6 +24,7 @@ class KnowledgeRetriever:
     
     @property
     def embeddings(self):
+        """تحميل نموذج التضمين عند الطلب فقط (Lazy Loading)"""
         if self._embeddings is None:
             print("🟡 جاري تحميل نموذج التضمين لأول مرة (قد يستغرق 30-60 ثانية)...")
             self._embeddings = HuggingFaceEmbeddings(
@@ -36,6 +37,7 @@ class KnowledgeRetriever:
     
     @property
     def text_splitter(self):
+        """إعداد تقسيم النصوص"""
         if self._text_splitter is None:
             self._text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=1000,
@@ -45,6 +47,7 @@ class KnowledgeRetriever:
         return self._text_splitter
     
     def index_pdfs(self):
+        """فهرسة جميع ملفات PDF في مجلد knowledge_base"""
         pdf_files = list(Path(self.knowledge_base_dir).glob("*.pdf"))
         if not pdf_files:
             logger.warning("لا توجد ملفات PDF في المجلد %s", self.knowledge_base_dir)
@@ -76,12 +79,15 @@ class KnowledgeRetriever:
                 embedding=self.embeddings,
                 persist_directory=self.persist_directory
             )
-            self._vectorstore.persist()
+            # persist() تمت إزالتها في الإصدارات الجديدة من Chroma، لكن نتركها للتوافق
+            if hasattr(self._vectorstore, 'persist'):
+                self._vectorstore.persist()
             logger.info(f"تم فهرسة {len(all_documents)} قطعة معرفة بنجاح")
         else:
             logger.warning("لم يتم استخراج أي نصوص من الملفات")
     
     def load_index(self):
+        """تحميل الفهرس الموجود (بدون إعادة الفهرسة)"""
         if os.path.exists(self.persist_directory):
             self._vectorstore = Chroma(
                 persist_directory=self.persist_directory,
@@ -92,6 +98,7 @@ class KnowledgeRetriever:
         return False
     
     def retrieve(self, query: str, k: int = 5):
+        """البحث عن أكثر القطع صلة بالسؤال"""
         if not self._vectorstore:
             if not self.load_index():
                 logger.error("لا يوجد فهرس معرفة. قم بتشغيل index_pdfs() أولاً")
@@ -101,6 +108,7 @@ class KnowledgeRetriever:
         return docs
     
     def format_context(self, docs) -> str:
+        """تنسيق القطع المسترجعة لتكون سياقاً مقروءاً"""
         if not docs:
             return ""
         
@@ -112,17 +120,23 @@ class KnowledgeRetriever:
             context += doc.page_content.strip() + "\n\n"
         return context
 
+
 # --- Lazy Loading للكائن العام ---
 _retriever_instance = None
 
 def get_retriever():
+    """إرجاع كائن KnowledgeRetriever (يتم تحميله عند الطلب)"""
     global _retriever_instance
     if _retriever_instance is None:
         print("🟡 تهيئة نظام استرجاع المعرفة...")
         _retriever_instance = KnowledgeRetriever()
-        if os.path.exists("knowledge_base"):
+        # محاولة تحميل الفهرس الموجود فقط
+        # استخدام self.persist_directory لتجنب أخطاء المسار
+        if os.path.exists(_retriever_instance.persist_directory):
             _retriever_instance.load_index()
         print("🟢 تم تهيئة نظام استرجاع المعرفة")
     return _retriever_instance
 
-retriever = get_retriever()
+# ⚠️ تم حذف السطر التالي عمداً لأنه كان يسبب تعطل السيرفر
+# retriever = get_retriever()
+# بدلاً من ذلك، استدعِ get_retriever() من داخل دوال الـ API فقط عند الحاجة.
