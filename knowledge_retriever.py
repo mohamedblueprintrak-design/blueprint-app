@@ -13,7 +13,7 @@ from langchain_community.vectorstores import Chroma
 logger = logging.getLogger("knowledge_retriever")
 
 class KnowledgeRetriever:
-    """نظام استرجاع المعرفة من ملفات PDF باستخدام LangChain و ChromaDB (متوافق مع الإصدارات الجديدة)"""
+    """نظام استرجاع المعرفة من ملفات PDF باستخدام LangChain و ChromaDB"""
     
     def __init__(self, knowledge_base_dir: str = "knowledge_base", persist_directory: str = "chroma_db"):
         self.knowledge_base_dir = knowledge_base_dir
@@ -24,7 +24,6 @@ class KnowledgeRetriever:
     
     @property
     def embeddings(self):
-        """تحميل نموذج التضمين عند الطلب فقط (Lazy Loading)"""
         if self._embeddings is None:
             print("🟡 جاري تحميل نموذج التضمين لأول مرة (قد يستغرق 30-60 ثانية)...")
             self._embeddings = HuggingFaceEmbeddings(
@@ -37,7 +36,6 @@ class KnowledgeRetriever:
     
     @property
     def text_splitter(self):
-        """إعداد تقسيم النصوص"""
         if self._text_splitter is None:
             self._text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=1000,
@@ -47,7 +45,6 @@ class KnowledgeRetriever:
         return self._text_splitter
     
     def index_pdfs(self):
-        """فهرسة جميع ملفات PDF في مجلد knowledge_base"""
         pdf_files = list(Path(self.knowledge_base_dir).glob("*.pdf"))
         if not pdf_files:
             logger.warning("لا توجد ملفات PDF في المجلد %s", self.knowledge_base_dir)
@@ -85,7 +82,6 @@ class KnowledgeRetriever:
             logger.warning("لم يتم استخراج أي نصوص من الملفات")
     
     def load_index(self):
-        """تحميل الفهرس الموجود (بدون إعادة الفهرسة)"""
         if os.path.exists(self.persist_directory):
             self._vectorstore = Chroma(
                 persist_directory=self.persist_directory,
@@ -96,7 +92,6 @@ class KnowledgeRetriever:
         return False
     
     def retrieve(self, query: str, k: int = 5):
-        """البحث عن أكثر القطع صلة بالسؤال"""
         if not self._vectorstore:
             if not self.load_index():
                 logger.error("لا يوجد فهرس معرفة. قم بتشغيل index_pdfs() أولاً")
@@ -106,7 +101,6 @@ class KnowledgeRetriever:
         return docs
     
     def format_context(self, docs) -> str:
-        """تنسيق القطع المسترجعة لتكون سياقاً مقروءاً"""
         if not docs:
             return ""
         
@@ -122,7 +116,6 @@ class KnowledgeRetriever:
 _retriever_instance = None
 
 def get_retriever():
-    """إرجاع كائن KnowledgeRetriever (يتم تحميله عند الطلب)"""
     global _retriever_instance
     if _retriever_instance is None:
         print("🟡 تهيئة نظام استرجاع المعرفة...")
@@ -132,5 +125,4 @@ def get_retriever():
         print("🟢 تم تهيئة نظام استرجاع المعرفة")
     return _retriever_instance
 
-# للتوافق مع الكود القديم
 retriever = get_retriever()
