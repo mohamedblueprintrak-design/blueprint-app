@@ -8,14 +8,17 @@ from datetime import datetime
 from passlib.context import CryptContext
 
 import os
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://...")  # الرابط الافتراضي القديم اختياري
-# تعديل: استخدام متغير البيئة DATABASE_URL مع دعم كل من SQLite و PostgreSQL
+
+# ✅ التعديل هنا: استخدام SQLite افتراضياً للتشغيل المحلي
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./blueprint.db")
+
+# دعم كل من PostgreSQL و SQLite
 if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
-    # PostgreSQL لا يحتاج connect_args
     engine = create_engine(SQLALCHEMY_DATABASE_URL)
 else:
     # SQLite يحتاج connect_args
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
