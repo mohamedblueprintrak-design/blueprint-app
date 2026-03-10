@@ -9,6 +9,9 @@ from classifier import classify_request
 from agents import struct_agent, vision_agent, reasoning_agent
 from tools import get_site_checklist, boq_steel_calculator, boq_concrete_calculator, update_unit_prices_from_db
 
+# استيراد دالة استرجاع المعرفة
+from knowledge_retriever import get_retriever
+
 logger = logging.getLogger("orchestrator")
 
 async def extract_pdf_text(file_bytes):
@@ -33,6 +36,7 @@ async def route_request(text=None, file_bytes=None, file_type=None, project_id=N
         results = struct_agent.analyze(text, nums)
         return {"task": "beam_tool", "results": results, "domain": "design"}
     
+    # تصنيف الطلب
     classification = classify_request(text, file_type)
     task = classification.get("task", "chat")
     domain = classification.get("domain", "general")
@@ -40,13 +44,24 @@ async def route_request(text=None, file_bytes=None, file_type=None, project_id=N
     image_base64 = base64.b64encode(file_bytes).decode("utf-8") if file_bytes else None
     nums = re.findall(r"[-+]?\d*\.\d+|\d+", text or "")
 
-    # --- تم تعطيل البحث في قاعدة المعرفة مؤقتاً لحل مشكلة الذاكرة ---
+    # استرجاع المعرفة من قاعدة المعرفة
     knowledge_context = ""
+    if text and len(text) > 10 and project_id:
+        try:
+            retriever = get_retriever()
+            if retriever:
+                docs = retriever.retrieve(text, k=3)
+                if docs:
+                    knowledge_context = retriever.format_context(docs)
+                    logger.info(f"Retrieved {len(docs)} knowledge chunks for query: {text[:50]}...")
+        except Exception as e:
+            logger.error(f"Knowledge retrieval failed: {e}")
 
     if domain == "design":
         results = struct_agent.analyze(text, nums)
         if results:
-            summary = await reasoning_agent.generate_summary(results)
+            enhanced_summary_prompt = f"{knowledge_context}\n\nلخص النتائج الهندسية التالية:\n{json.dumps(results)}"
+            summary = await reasoning_agent.generate_summary({"text": enhanced_summary_prompt})
             results["🤖 ملخص ذكي"] = summary
         return {"task": task, "results": results, "domain": domain}
 
@@ -96,7 +111,8 @@ async def route_request(text=None, file_bytes=None, file_type=None, project_id=N
 
     if text:
         enhanced_prompt = text
-        # يمكن إضافة knowledge_context لاحقاً
+        if knowledge_context:
+            enhanced_prompt = f"معلومات مرجعية:\n{knowledge_context}\n\nسؤال المستخدم:\n{text}"
         res = await reasoning_agent.chat(enhanced_prompt, history=history, project_id=project_id)
         results["💻 Blue"] = res
 
