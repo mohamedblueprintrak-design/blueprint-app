@@ -32,7 +32,7 @@ pwa_html = """
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
-BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000")  # غير الرابط حسب الحاجة
+BACKEND = "http://localhost:8000"  # غير الرابط حسب الحاجة
 
 # تهيئة Session State
 if "msgs" not in st.session_state:
@@ -135,6 +135,12 @@ st.markdown("""
             linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
         background-size: 30px 30px;
         color: #ffffff;
+    }
+
+    /* جعل كل النصوص بيضاء بشكل عام */
+    .stApp div, .stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp span, 
+    .stApp label, .stApp .stMarkdown, .stApp .stText, .stApp .stCaption {
+        color: white !important;
     }
 
     [data-testid="stSidebar"] {
@@ -628,20 +634,18 @@ if data is None:
 
 health_score = data.get('health_score', 50)
 
-# الهيدر الرئيسي
-st.markdown(f"""
-<div class="bp-card" style="margin-bottom: 2rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-        <div>
-            <h1 class="bp-header" style="font-size: 2rem; margin:0;">🏗️ {data['project_info']['name']}</h1>
-            <p style="color: #e2e8f0;">📍 {data['project_info']['location']} | 🕒 {tr('آخر تحديث', 'Last updated')}: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-        </div>
-        <div style="text-align: center; width: 200px;">
-            {st.plotly_chart(get_health_gauge(health_score), use_container_width=True)}
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# ========== الكارت الموحد (اسم المشروع + مؤشر الصحة) ==========
+with st.container():
+    col_left, col_right = st.columns([3, 1])
+
+    with col_left:
+        st.markdown(f"<h1 class='bp-header' style='font-size: 2rem; margin:0;'>🏗️ {data['project_info']['name']}</h1>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #e2e8f0;'>📍 {data['project_info']['location']} | 🕒 {tr('آخر تحديث', 'Last updated')}: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>", unsafe_allow_html=True)
+
+    with col_right:
+        # عرض مؤشر الصحة
+        fig = get_health_gauge(health_score)
+        st.plotly_chart(fig, use_container_width=True)
 
 # المؤشرات الأربعة
 col1, col2, col3, col4 = st.columns(4)
@@ -1019,7 +1023,7 @@ with tabs[5]:
             
             generate_clicked = st.form_submit_button(tr("📥 إنشاء التقرير", "📥 Generate Report"))
         
-        # خارج الـ form: معالجة النتيجة وعرض زر التحميل
+        # خارج الـ form: معالجة النتيجة وعرض زر التحميل والواتساب
         if generate_clicked:
             with st.spinner(tr("جاري إنشاء التقرير...", "Generating report...")):
                 # حفظ الصور مؤقتاً
@@ -1046,27 +1050,39 @@ with tabs[5]:
                     pdf_bytes = generate_daily_report(project_id, report_data)
                     
                     if pdf_bytes:
-                        # تخزين PDF في session_state
+                        # تخزين PDF وتاريخ التقرير في session_state
                         st.session_state["generated_pdf"] = pdf_bytes
                         st.session_state["generated_pdf_name"] = f"daily_report_{project_id}_{report_date}.pdf"
+                        st.session_state["generated_pdf_date"] = report_date  # لحفظ التاريخ لاستخدامه في الواتساب
                         st.success(tr("✅ تم إنشاء التقرير بنجاح", "✅ Report generated successfully"))
                     else:
                         st.error(tr("❌ فشل إنشاء التقرير", "❌ Failed to generate report"))
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
         
-        # عرض زر التحميل إذا كان هناك PDF في session_state
+        # عرض أزرار التحميل والواتساب إذا كان هناك PDF في session_state
         if "generated_pdf" in st.session_state and st.session_state["generated_pdf"] is not None:
-            st.download_button(
-                label=tr("⬇️ تحميل التقرير", "⬇️ Download Report"),
-                data=st.session_state["generated_pdf"],
-                file_name=st.session_state["generated_pdf_name"],
-                mime="application/pdf",
-                key="download_pdf_btn"
-            )
-            # اختياري: زر لمسح التقرير من الذاكرة
+            col_dl, col_wa, _ = st.columns([1, 1, 3])  # تخصيص المساحة
+            with col_dl:
+                st.download_button(
+                    label=tr("⬇️ تحميل التقرير", "⬇️ Download Report"),
+                    data=st.session_state["generated_pdf"],
+                    file_name=st.session_state["generated_pdf_name"],
+                    mime="application/pdf",
+                    key="download_pdf_btn"
+                )
+            with col_wa:
+                # إعداد رسالة واتساب
+                report_date_str = st.session_state.get("generated_pdf_date", datetime.now()).strftime("%Y-%m-%d")
+                wa_text = f"تم إنشاء تقرير موقع لمشروع {data['project_info']['name']} بتاريخ {report_date_str}. يمكنك تحميله من المنصة."
+                encoded_text = urllib.parse.quote(wa_text)
+                wa_link = f"https://wa.me/?text={encoded_text}"
+                st.link_button(tr("📱 مشاركة عبر واتساب", "📱 Share on WhatsApp"), wa_link, use_container_width=True)
+            
+            # زر مسح التقرير من الذاكرة
             if st.button(tr("مسح التقرير من الذاكرة", "Clear report from memory")):
                 st.session_state["generated_pdf"] = None
+                st.session_state["generated_pdf_date"] = None
                 st.rerun()
     
     st.markdown("---")
@@ -1219,35 +1235,98 @@ with tabs[6]:
             except Exception as e:
                 st.error(f"⚠️ {str(e)}")
 
-# ========== مهام المهندس (Tasks) ==========
+# ========== مهام المهندس (Tasks) مع تحسينات ==========
 with tabs[7]:
     st.subheader(tr("📋 إدارة مهام المهندسين", "📋 Engineer Tasks"))
+    
+    # قائمة المهندسين (يمكنك تعديلها)
+    engineers = ["م. أحمد", "م. سارة", "م. خالد", "م. محمد", "م. علي", "م. فاطمة"]
+    
+    # حالات المهمة الممكنة
+    task_statuses = ["قيد الانتظار", "جاري", "منتهية"]
     
     col1, col2 = st.columns([1, 2])
     
     with col1:
-        with st.form("task_form"):
-            t_desc = st.text_input(tr("وصف المهمة", "Task description"))
-            t_ass = st.selectbox(tr("المهندس", "Engineer"), ["م. أحمد", "م. سارة", "م. خالد"])
-            t_date = st.date_input(tr("تاريخ التسليم", "Deadline"), date.today())
-            t_prio = st.select_slider(tr("الأولوية", "Priority"), options=["منخفضة", "متوسطة", "عالية"])
-            if st.form_submit_button(tr("➕ إضافة مهمة", "➕ Add task")):
-                st.session_state.tasks.append({
+        with st.form("task_form", clear_on_submit=True):
+            st.markdown("### ➕ إضافة مهمة جديدة")
+            t_desc = st.text_input(tr("وصف المهمة", "Task description"), key="task_desc")
+            t_ass = st.selectbox(tr("المهندس", "Engineer"), engineers, key="task_ass")
+            t_date = st.date_input(tr("تاريخ التسليم", "Deadline"), value=date.today(), key="task_date")
+            t_prio = st.select_slider(tr("الأولوية", "Priority"), options=["منخفضة", "متوسطة", "عالية"], value="متوسطة", key="task_prio")
+            t_status = st.selectbox(tr("الحالة", "Status"), task_statuses, index=0, key="task_status")
+            
+            submitted = st.form_submit_button(tr("➕ إضافة مهمة", "➕ Add task"))
+            if submitted and t_desc:
+                if "tasks" not in st.session_state:
+                    st.session_state.tasks = []
+                
+                new_task = {
+                    "id": len(st.session_state.tasks) + 1,  # مؤقت، لاستخدامه في العمليات
                     "المهمة": t_desc,
                     "المسؤول": t_ass,
-                    "التاريخ": t_date.strftime("%Y-%m-%d"),
+                    "تاريخ التسليم": t_date.strftime("%Y-%m-%d"),
                     "الأولوية": t_prio,
-                    "الحالة": "قيد الانتظار"
-                })
+                    "الحالة": t_status,
+                    "تاريخ الإنشاء": datetime.now().strftime("%Y-%m-%d %H:%M")
+                }
+                st.session_state.tasks.append(new_task)
                 st.success(tr("✅ تمت الإضافة", "✅ Added"))
                 st.rerun()
     
     with col2:
-        if st.session_state.tasks:
-            df_tasks = pd.DataFrame(st.session_state.tasks)
-            st.table(df_tasks)
+        if "tasks" in st.session_state and st.session_state.tasks:
+            st.markdown("### 📋 قائمة المهام")
+            
+            # عرض المهام في جدول مع أزرار لتحديث الحالة
+            for i, task in enumerate(st.session_state.tasks):
+                cols = st.columns([3, 1, 1, 1, 1])
+                with cols[0]:
+                    st.write(f"**{task['المهمة']}**")
+                    st.caption(f"{task['المسؤول']} | أولوية: {task['الأولوية']}")
+                with cols[1]:
+                    st.write(f"تسليم: {task['تاريخ التسليم']}")
+                with cols[2]:
+                    # عرض الحالة بشكل ملون
+                    status_color = {
+                        "قيد الانتظار": "🟡",
+                        "جاري": "🔵",
+                        "منتهية": "✅"
+                    }.get(task['الحالة'], "⚪")
+                    st.write(f"{status_color} {task['الحالة']}")
+                with cols[3]:
+                    # زر لتغيير الحالة إلى التالية
+                    if task['الحالة'] != "منتهية":
+                        next_status = "جاري" if task['الحالة'] == "قيد الانتظار" else "منتهية"
+                        if st.button(f"⏩ {next_status}", key=f"status_{i}"):
+                            st.session_state.tasks[i]['الحالة'] = next_status
+                            st.rerun()
+                    else:
+                        st.write("---")
+                with cols[4]:
+                    # زر لحذف المهمة
+                    if st.button("🗑️", key=f"del_{i}"):
+                        st.session_state.tasks.pop(i)
+                        st.rerun()
+                st.markdown("---")
+            
+            # إحصائيات سريعة
+            col_stat1, col_stat2, col_stat3 = st.columns(3)
+            with col_stat1:
+                st.metric("إجمالي المهام", len(st.session_state.tasks))
+            with col_stat2:
+                pending = sum(1 for t in st.session_state.tasks if t['الحالة'] == "قيد الانتظار")
+                st.metric("قيد الانتظار", pending)
+            with col_stat3:
+                completed = sum(1 for t in st.session_state.tasks if t['الحالة'] == "منتهية")
+                st.metric("منتهية", completed)
+            
+            # زر لحذف جميع المهام المنتهية
+            if st.button(tr("🗑️ حذف المنتهية", "🗑️ Clear completed")):
+                st.session_state.tasks = [t for t in st.session_state.tasks if t['الحالة'] != "منتهية"]
+                st.rerun()
         else:
-            st.info(tr("لا توجد مهام", "No tasks"))
+            st.info(tr("لا توجد مهام. أضف مهمة جديدة من اليسار.", "No tasks. Add a new task from the left."))
 
 # تذييل الصفحة
 st.markdown("<br><hr style='border-color:#334155;'><center style='color: #cbd5e1;'>BluePrint AI v3.0 | 2026</center>", unsafe_allow_html=True)
