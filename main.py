@@ -1,3 +1,8 @@
+"""
+BluePrint Engineering Consultancy - AI-Powered Engineering OS
+Backend (FastAPI) - نسخة محدثة بهيكل استجابات موحد ودعم CORS
+"""
+
 import sys
 import os
 import base64
@@ -10,7 +15,7 @@ from typing import List, Optional
 from sqlalchemy import func
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, FileResponse
+from fastapi.responses import Response, FileResponse, JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -22,13 +27,11 @@ import redis
 import json
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-import gc # استيراد مكتبة تنظيف الذاكرة
+import gc
 import sys
 import os
 
-# --- تفعيل تنظيف الذاكرة ---
-gc.enable() 
-# اختيارياً: ضبط تكرار التنظيف (بيخلي البرنامج ينظف الذاكرة كل شوية)
+gc.enable()
 gc.set_threshold(500, 10, 10)
 
 sys.stdout.reconfigure(encoding='utf-8')
@@ -172,9 +175,14 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 
 app = FastAPI(title="Engineering OS v9.0 - Enterprise Edition")
 
+# ========== إضافة CORS ==========
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8501",  # Streamlit
+        "http://localhost:3000",  # React (Vite)
+        "http://localhost:8000",  # نفس الباك إند
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -192,19 +200,32 @@ def on_startup():
 def shutdown_event():
     scheduler.shutdown()
 
+# دالة مساعدة لإرجاع استجابة موحدة
+def success_response(data=None, meta=None):
+    response = {"success": True, "data": data}
+    if meta:
+        response["meta"] = meta
+    return JSONResponse(content=response)
+
+def error_response(message, code="ERROR", status_code=400):
+    return JSONResponse(
+        status_code=status_code,
+        content={"success": False, "error": {"code": code, "message": message}}
+    )
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "redis": redis_client is not None, "scheduler": "running"}
+    return success_response({"status": "ok", "redis": redis_client is not None, "scheduler": "running"})
 
 # ---------- Endpoints المستخدمين والمشاريع ----------
 @app.post("/register")
 def register(username: str, email: str, password: str, full_name: str = "", role: str = "viewer"):
     if len(password.encode('utf-8')) > 72:
-        raise HTTPException(status_code=400, detail="كلمة المرور طويلة جداً. الحد الأقصى 72 حرفاً.")
+        return error_response("كلمة المرور طويلة جداً. الحد الأقصى 72 حرفاً.", code="PASSWORD_TOO_LONG")
     db = SessionLocal()
     try:
         if db.query(User).filter((User.username == username) | (User.email == email)).first():
-            raise HTTPException(status_code=400, detail="Username or email already registered")
+            return error_response("Username or email already registered", code="USER_EXISTS")
         hashed = get_password_hash(password)
         user = User(
             username=username,
@@ -216,33 +237,33 @@ def register(username: str, email: str, password: str, full_name: str = "", role
         db.add(user)
         db.commit()
         db.refresh(user)
-        return {"id": user.id, "username": user.username, "role": user.role}
+        return success_response({"id": user.id, "username": user.username, "role": user.role})
     finally:
         db.close()
 
 @app.post("/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     if len(form_data.password.encode('utf-8')) > 72:
-        raise HTTPException(status_code=400, detail="كلمة المرور طويلة جداً. الحد الأقصى 72 حرفاً.")
+        return error_response("كلمة المرور طويلة جداً. الحد الأقصى 72 حرفاً.", code="PASSWORD_TOO_LONG")
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.username == form_data.username).first()
         if not user or not verify_password(form_data.password, user.hashed_password):
-            raise HTTPException(status_code=400, detail="Incorrect username or password")
+            return error_response("Incorrect username or password", code="INVALID_CREDENTIALS", status_code=400)
         access_token = create_access_token(data={"sub": user.username})
-        return {"access_token": access_token, "token_type": "bearer"}
+        return success_response({"access_token": access_token, "token_type": "bearer"})
     finally:
         db.close()
 
 @app.get("/users/me")
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
-    return {
+    return success_response({
         "id": current_user.id,
         "username": current_user.username,
         "email": current_user.email,
         "role": current_user.role,
         "full_name": current_user.full_name
-    }
+    })
 
 @app.post("/projects/{project_id}/add_user")
 def add_user_to_project(
@@ -252,13 +273,13 @@ def add_user_to_project(
     current_user: User = Depends(get_current_active_user)
 ):
     if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Not enough permissions")
+        return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     db = SessionLocal()
     try:
         project = db.query(Project).filter(Project.id == project_id).first()
         user = db.query(User).filter(User.id == user_id).first()
         if not project or not user:
-            raise HTTPException(status_code=404, detail="Project or User not found")
+            return error_response("Project or User not found", code="NOT_FOUND", status_code=404)
         existing = db.query(ProjectUser).filter(
             ProjectUser.project_id == project_id,
             ProjectUser.user_id == user_id
@@ -269,7 +290,7 @@ def add_user_to_project(
             pu = ProjectUser(project_id=project_id, user_id=user_id, permission=permission)
             db.add(pu)
         db.commit()
-        return {"success": True}
+        return success_response(True)
     finally:
         db.close()
 
@@ -289,10 +310,10 @@ def create_project(
         db.commit()
         db.refresh(proj)
         logger.info(f"Created Project: {proj.name} by user {current_user.username}")
-        return {"id": proj.id, "name": proj.name}
+        return success_response({"id": proj.id, "name": proj.name})
     except Exception as e:
         logger.error(f"Error creating project: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="CREATE_FAILED")
     finally:
         db.close()
 
@@ -304,7 +325,7 @@ def get_projects(current_user: User = Depends(get_current_active_user)):
             projects = db.query(Project).all()
         else:
             projects = db.query(Project).join(ProjectUser).filter(ProjectUser.user_id == current_user.id).all()
-        return [{"id": p.id, "name": p.name, "location": p.location} for p in projects]
+        return success_response([{"id": p.id, "name": p.name, "location": p.location} for p in projects])
     finally:
         db.close()
 
@@ -320,13 +341,13 @@ def delete_project(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
         proj = db.query(Project).filter(Project.id == project_id).first()
         if proj:
             db.delete(proj)
             db.commit()
             logger.info(f"Deleted Project ID: {project_id}")
-        return {"success": True}
+        return success_response(True)
     finally:
         db.close()
 
@@ -341,7 +362,7 @@ def get_project_data(
         cached = redis_client.get(cache_key)
         if cached:
             logger.info(f"✅ استخدام cached data للمشروع {project_id}")
-            return json.loads(cached)
+            return success_response(json.loads(cached))
 
     db = SessionLocal()
     try:
@@ -350,10 +371,10 @@ def get_project_data(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and not project_user:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
-            return {"error": "Project not found"}
+            return error_response("Project not found", code="NOT_FOUND", status_code=404)
 
         analyses = db.query(Analysis).filter(Analysis.project_id == project_id).order_by(Analysis.created_at.desc()).all()
         boqs = db.query(BOQItem).filter(BOQItem.project_id == project_id).all()
@@ -393,7 +414,7 @@ def get_project_data(
         if redis_client:
             redis_client.setex(cache_key, 300, json.dumps(result))
 
-        return result
+        return success_response(result)
     finally:
         db.close()
 
@@ -413,7 +434,7 @@ async def process_request(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -505,7 +526,7 @@ async def process_request(
     finally:
         db.close()
 
-    return result
+    return success_response(result)
 
 # ---------- Endpoint تصدير PDF ----------
 @app.get("/export_pdf/{project_id}")
@@ -520,7 +541,7 @@ def export_pdf(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and not project_user:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -532,10 +553,10 @@ def export_pdf(
                 media_type="application/pdf",
                 headers={"Content-Disposition": f"attachment; filename=report_{project_id}.pdf"}
             )
-        return {"error": "Could not generate PDF"}
+        return error_response("Could not generate PDF", code="PDF_FAILED")
     except Exception as e:
         logger.error(f"PDF Export Error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="EXCEPTION")
 
 # ---------- Endpoint إضافة بند حصر ----------
 @app.post("/add_boq/{project_id}")
@@ -554,7 +575,7 @@ def add_boq_item(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -569,10 +590,10 @@ def add_boq_item(
         )
         db.add(new_item)
         db.commit()
-        return {"success": True}
+        return success_response({"id": new_item.id})
     except Exception as e:
         logger.error(f"Add BOQ error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="DB_ERROR")
     finally:
         db.close()
 
@@ -586,19 +607,19 @@ def delete_boq_item(
     try:
         item = db.query(BOQItem).filter(BOQItem.id == boq_id).first()
         if not item:
-            return {"error": "BOQ item not found"}
+            return error_response("BOQ item not found", code="NOT_FOUND", status_code=404)
         project_user = db.query(ProjectUser).filter(
             ProjectUser.project_id == item.project_id,
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
         db.delete(item)
         db.commit()
-        return {"success": True}
+        return success_response(True)
     except Exception as e:
         logger.error(f"Delete BOQ error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="DB_ERROR")
     finally:
         db.close()
 
@@ -615,13 +636,13 @@ def update_defect(
     try:
         defect = db.query(Defect).filter(Defect.id == defect_id).first()
         if not defect:
-            return {"error": "Defect not found"}
+            return error_response("Defect not found", code="NOT_FOUND", status_code=404)
         project_user = db.query(ProjectUser).filter(
             ProjectUser.project_id == defect.project_id,
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
         if description:
             defect.description = description
         if severity:
@@ -629,10 +650,10 @@ def update_defect(
         if status:
             defect.status = status
         db.commit()
-        return {"success": True}
+        return success_response(True)
     except Exception as e:
         logger.error(f"Update defect error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="DB_ERROR")
     finally:
         db.close()
 
@@ -646,19 +667,19 @@ def delete_defect(
     try:
         defect = db.query(Defect).filter(Defect.id == defect_id).first()
         if not defect:
-            return {"error": "Defect not found"}
+            return error_response("Defect not found", code="NOT_FOUND", status_code=404)
         project_user = db.query(ProjectUser).filter(
             ProjectUser.project_id == defect.project_id,
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
         db.delete(defect)
         db.commit()
-        return {"success": True}
+        return success_response(True)
     except Exception as e:
         logger.error(f"Delete defect error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="DB_ERROR")
     finally:
         db.close()
 
@@ -675,7 +696,7 @@ def get_project_settings(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and not project_user:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -687,11 +708,11 @@ def get_project_settings(
             db.add(settings)
             db.commit()
             db.refresh(settings)
-        return {
+        return success_response({
             "concrete_price": settings.concrete_price,
             "steel_price": settings.steel_price,
             "preferred_ai_model": settings.preferred_ai_model
-        }
+        })
     finally:
         db.close()
 
@@ -710,7 +731,7 @@ def save_project_settings(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -724,10 +745,10 @@ def save_project_settings(
         settings.steel_price = steel_price
         settings.preferred_ai_model = preferred_ai_model
         db.commit()
-        return {"success": True}
+        return success_response(True)
     except Exception as e:
         logger.error(f"Save settings error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="DB_ERROR")
     finally:
         db.close()
 
@@ -744,7 +765,7 @@ def project_stats(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and not project_user:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -754,12 +775,12 @@ def project_stats(
         files_count = db.query(UploadedFile).filter(UploadedFile.project_id == project_id).count()
         defects_count = db.query(Defect).filter(Defect.project_id == project_id).count()
         total_cost = db.query(func.sum(BOQItem.total_price)).filter(BOQItem.project_id == project_id).scalar() or 0
-        return {
+        return success_response({
             "analyses_count": analyses_count,
             "files_count": files_count,
             "defects_count": defects_count,
             "total_cost": total_cost
-        }
+        })
     finally:
         db.close()
 
@@ -776,7 +797,7 @@ def export_boq_excel(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and not project_user:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -784,7 +805,7 @@ def export_boq_excel(
     try:
         boqs = db.query(BOQItem).filter(BOQItem.project_id == project_id).all()
         if not boqs:
-            return {"error": "No BOQ items"}
+            return error_response("No BOQ items", code="NOT_FOUND", status_code=404)
         data = []
         for b in boqs:
             data.append({
@@ -799,7 +820,7 @@ def export_boq_excel(
             return FileResponse(tmp.name, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=f"boq_project_{project_id}.xlsx")
     except Exception as e:
         logger.error(f"Export BOQ error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="EXPORT_FAILED")
     finally:
         db.close()
 
@@ -821,7 +842,7 @@ async def upload_site_visit(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -861,11 +882,11 @@ async def upload_site_visit(
                     )
                     db.add(img_record)
         db.commit()
-        return {"success": True, "site_visit_id": site_visit.id}
+        return success_response({"site_visit_id": site_visit.id})
     except Exception as e:
         logger.error(f"Upload site visit error: {e}")
         db.rollback()
-        return {"error": str(e)}
+        return error_response(str(e), code="UPLOAD_FAILED")
     finally:
         db.close()
 
@@ -881,7 +902,7 @@ def get_site_visits(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and not project_user:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -900,7 +921,7 @@ def get_site_visits(
                 "notes": v.notes,
                 "images": [{"path": img.image_path, "caption": img.caption} for img in images]
             })
-        return result
+        return success_response(result)
     finally:
         db.close()
 
@@ -921,7 +942,7 @@ def add_memory_entry(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -936,10 +957,10 @@ def add_memory_entry(
         )
         db.add(memory)
         db.commit()
-        return {"success": True, "id": memory.id}
+        return success_response({"id": memory.id})
     except Exception as e:
         logger.error(f"Add memory error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="DB_ERROR")
     finally:
         db.close()
 
@@ -957,7 +978,7 @@ def get_memory_entries(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and not project_user:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -969,7 +990,7 @@ def get_memory_entries(
         if tag:
             query = query.filter(MemoryEntry.tags.contains(tag))
         entries = query.order_by(MemoryEntry.created_at.desc()).all()
-        return [
+        return success_response([
             {
                 "id": e.id,
                 "entry_type": e.entry_type,
@@ -979,7 +1000,7 @@ def get_memory_entries(
                 "created_at": e.created_at.isoformat()
             }
             for e in entries
-        ]
+        ])
     finally:
         db.close()
 
@@ -994,7 +1015,7 @@ def create_workflow(
     current_user: User = Depends(get_current_active_user)
 ):
     if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can create workflows")
+        return error_response("Only admins can create workflows", code="FORBIDDEN", status_code=403)
     db = SessionLocal()
     try:
         workflow = Workflow(
@@ -1006,10 +1027,10 @@ def create_workflow(
         )
         db.add(workflow)
         db.commit()
-        return {"success": True, "id": workflow.id}
+        return success_response({"id": workflow.id})
     except Exception as e:
         logger.error(f"Create workflow error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="DB_ERROR")
     finally:
         db.close()
 
@@ -1025,14 +1046,14 @@ def get_workflows(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and not project_user:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
     db = SessionLocal()
     try:
         workflows = db.query(Workflow).filter(Workflow.project_id == project_id).all()
-        return [
+        return success_response([
             {
                 "id": w.id,
                 "name": w.name,
@@ -1042,7 +1063,7 @@ def get_workflows(
                 "is_active": w.is_active
             }
             for w in workflows
-        ]
+        ])
     finally:
         db.close()
 
@@ -1052,18 +1073,19 @@ def toggle_workflow(
     current_user: User = Depends(get_current_active_user)
 ):
     if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can modify workflows")
+        return error_response("Only admins can modify workflows", code="FORBIDDEN", status_code=403)
     db = SessionLocal()
     try:
         workflow = db.query(Workflow).filter(Workflow.id == workflow_id).first()
         if not workflow:
-            return {"error": "Workflow not found"}
+            return error_response("Workflow not found", code="NOT_FOUND", status_code=404)
         workflow.is_active = not workflow.is_active
         db.commit()
-        return {"success": True, "is_active": workflow.is_active}
+        return success_response({"is_active": workflow.is_active})
     finally:
         db.close()
-        # ---------- Endpoint إضافة عيب يدوي ----------
+
+# ---------- Endpoint إضافة عيب يدوي ----------
 @app.post("/add_defect/{project_id}")
 def add_defect(
     project_id: int,
@@ -1072,7 +1094,6 @@ def add_defect(
     status: str = "Open",
     current_user: User = Depends(get_current_active_user)
 ):
-    # التحقق من الصلاحية
     db_check = SessionLocal()
     try:
         project_user = db_check.query(ProjectUser).filter(
@@ -1080,7 +1101,7 @@ def add_defect(
             ProjectUser.user_id == current_user.id
         ).first()
         if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
-            raise HTTPException(status_code=403, detail="Not enough permissions")
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
     finally:
         db_check.close()
 
@@ -1094,39 +1115,9 @@ def add_defect(
         )
         db.add(new_defect)
         db.commit()
-        return {"success": True, "id": new_defect.id}
+        return success_response({"id": new_defect.id})
     except Exception as e:
         logger.error(f"Add defect error: {e}")
-        return {"error": str(e)}
+        return error_response(str(e), code="DB_ERROR")
     finally:
         db.close()
-            # ---------- Endpoint تصدير Word ----------
-@app.get("/export_word/{project_id}")
-def export_word(
-    project_id: int,
-    current_user: User = Depends(get_current_active_user)
-):
-    # التحقق من الصلاحية
-    db_check = SessionLocal()
-    try:
-        project_user = db_check.query(ProjectUser).filter(
-            ProjectUser.project_id == project_id,
-            ProjectUser.user_id == current_user.id
-        ).first()
-        if current_user.role != "admin" and not project_user:
-            raise HTTPException(status_code=403, detail="Not enough permissions")
-    finally:
-        db_check.close()
-
-    try:
-        word_bytes = generate_project_word(project_id)
-        if word_bytes:
-            return Response(
-                content=word_bytes, 
-                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                headers={"Content-Disposition": f"attachment; filename=report_{project_id}.docx"}
-            )
-        return {"error": "Could not generate Word document"}
-    except Exception as e:
-        logger.error(f"Word Export Error: {e}")
-        return {"error": str(e)}
