@@ -1,16 +1,19 @@
 import os
 import logging
 import shutil
-from typing import List, Dict, Any
 from pathlib import Path
+from typing import List, Optional
 
-# ملاحظة: تم إزالة الاستيرادات الثقيلة من المستوى الأعلى
-# وسيتم استيرادها داخل الدوال عند الحاجة
+# استخدام langchain_community بدلاً من langchain_huggingface
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Chroma
 
 logger = logging.getLogger("knowledge_retriever")
 
 class KnowledgeRetriever:
-    """نظام استرجاع المعرفة من ملفات PDF باستخدام LangChain و ChromaDB"""
+    """نظام استرجاع المعرفة من ملفات PDF باستخدام LangChain و ChromaDB (متوافق مع الإصدارات الجديدة)"""
     
     def __init__(self, knowledge_base_dir: str = "knowledge_base", persist_directory: str = "chroma_db"):
         self.knowledge_base_dir = knowledge_base_dir
@@ -24,7 +27,6 @@ class KnowledgeRetriever:
         """تحميل نموذج التضمين عند الطلب فقط (Lazy Loading)"""
         if self._embeddings is None:
             print("🟡 جاري تحميل نموذج التضمين لأول مرة (قد يستغرق 30-60 ثانية)...")
-            from langchain_huggingface import HuggingFaceEmbeddings
             self._embeddings = HuggingFaceEmbeddings(
                 model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
                 model_kwargs={'device': 'cpu'},
@@ -37,7 +39,6 @@ class KnowledgeRetriever:
     def text_splitter(self):
         """إعداد تقسيم النصوص"""
         if self._text_splitter is None:
-            from langchain.text_splitter import RecursiveCharacterTextSplitter
             self._text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=1000,
                 chunk_overlap=200,
@@ -47,9 +48,6 @@ class KnowledgeRetriever:
     
     def index_pdfs(self):
         """فهرسة جميع ملفات PDF في مجلد knowledge_base"""
-        from langchain_community.document_loaders import PyPDFLoader
-        from langchain_community.vectorstores import Chroma
-        
         pdf_files = list(Path(self.knowledge_base_dir).glob("*.pdf"))
         if not pdf_files:
             logger.warning("لا توجد ملفات PDF في المجلد %s", self.knowledge_base_dir)
@@ -78,7 +76,7 @@ class KnowledgeRetriever:
             
             self._vectorstore = Chroma.from_documents(
                 documents=all_documents,
-                embedding=self.embeddings,  # هنا يتم تحميل النموذج تلقائياً
+                embedding=self.embeddings,
                 persist_directory=self.persist_directory
             )
             self._vectorstore.persist()
@@ -89,7 +87,6 @@ class KnowledgeRetriever:
     def load_index(self):
         """تحميل الفهرس الموجود (بدون إعادة الفهرسة)"""
         if os.path.exists(self.persist_directory):
-            from langchain_community.vectorstores import Chroma
             self._vectorstore = Chroma(
                 persist_directory=self.persist_directory,
                 embedding_function=self.embeddings
@@ -105,7 +102,7 @@ class KnowledgeRetriever:
                 logger.error("لا يوجد فهرس معرفة. قم بتشغيل index_pdfs() أولاً")
                 return []
         
-        docs = self._vectorstore.max_marginal_relevance_search(query, k=k, fetch_k=20)
+        docs = self._vectorstore.similarity_search(query, k=k)
         return docs
     
     def format_context(self, docs) -> str:
@@ -121,7 +118,6 @@ class KnowledgeRetriever:
             context += doc.page_content.strip() + "\n\n"
         return context
 
-
 # --- Lazy Loading للكائن العام ---
 _retriever_instance = None
 
@@ -131,13 +127,10 @@ def get_retriever():
     if _retriever_instance is None:
         print("🟡 تهيئة نظام استرجاع المعرفة...")
         _retriever_instance = KnowledgeRetriever()
-        # لا نقوم بالفهرسة تلقائياً، بل نتركها للإدارة اليدوية
-        # محاولة تحميل الفهرس الموجود فقط
         if os.path.exists("knowledge_base"):
             _retriever_instance.load_index()
         print("🟢 تم تهيئة نظام استرجاع المعرفة")
     return _retriever_instance
 
-
-# للتوافق مع الكود القديم (إذا كان يستخدم `retriever` مباشرة)
+# للتوافق مع الكود القديم
 retriever = get_retriever()
