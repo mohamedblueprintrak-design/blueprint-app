@@ -47,11 +47,11 @@ reportlab==4.2.5
 azure-identity==1.19.0
 azure-keyvault-secrets==4.9.0
 
-# LangChain and friends (updated compatible versions)
+# LangChain and friends (إصدارات متوافقة ومجربة)
 langchain>=0.3.0,<0.4.0
 langchain-community>=0.3.0,<0.4.0
 langchain-huggingface>=0.3.0,<0.4.0
-langchain-core>=0.3.0,<0.4.0
+langchain-core>=0.3.82,<0.4.0
 chromadb>=0.5.0,<0.6.0
 sentence-transformers>=3.0.0,<4.0.0
 langsmith>=0.1.0,<0.2.0
