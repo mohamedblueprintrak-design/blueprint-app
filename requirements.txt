@@ -1,12 +1,12 @@
 # Core web frameworks and servers
 fastapi
 uvicorn[standard]
-streamlit
+streamlit==1.41.1
 httpx
 requests
 
 # Database
-sqlalchemy
+sqlalchemy>=2.0.0,<2.0.36
 psycopg2-binary
 redis
 
@@ -18,7 +18,7 @@ python-multipart
 # Data processing and analysis
 pandas
 numpy
-pydantic
+pydantic>=2.0.0
 python-dotenv
 
 # AI and LLM providers
@@ -47,11 +47,11 @@ reportlab
 azure-identity
 azure-keyvault-secrets
 
-# LangChain - تركنا الإصدارات مرنة ليحلها السيرفر تلقائياً
-langchain
-langchain-community
-langchain-huggingface
+# LangChain (Loosened versions to avoid SQLAlchemy conflict)
+langchain>=0.3.0
+langchain-community>=0.3.0
 langchain-core>=0.3.65
+langchain-huggingface>=0.3.0
 chromadb
 sentence-transformers
 langsmith
