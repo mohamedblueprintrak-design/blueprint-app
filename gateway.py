@@ -32,7 +32,7 @@ pwa_html = """
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
-BACKEND = "http://localhost:8000"  # غير الرابط حسب الحاجة
+BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000")  # غير الرابط حسب الحاجة
 
 # تهيئة Session State
 if "msgs" not in st.session_state:
