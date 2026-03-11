@@ -48,7 +48,7 @@ from database import (
     Project, Analysis, SiteReport, BOQItem, 
     UploadedFile, Defect, ProjectSettings,
     User, ProjectUser, SiteVisit, SiteVisitImage,
-    MemoryEntry, Workflow, WorkflowLog,
+    MemoryEntry, Workflow, WorkflowLog, Task,  # أضفنا Task هنا
     get_password_hash, verify_password
 )
 
@@ -380,6 +380,7 @@ def get_project_data(
         boqs = db.query(BOQItem).filter(BOQItem.project_id == project_id).all()
         defects = db.query(Defect).filter(Defect.project_id == project_id).all()
         files = db.query(UploadedFile).filter(UploadedFile.project_id == project_id).all()
+        tasks = db.query(Task).filter(Task.project_id == project_id).all()  # NEW
 
         total_cost = sum([b.total_price or 0 for b in boqs])
 
@@ -409,6 +410,16 @@ def get_project_data(
             ],
             "files_count": len(files),
             "health_score": health_score,
+            "tasks": [  # NEW
+                {
+                    "id": t.id,
+                    "description": t.description,
+                    "assignee": t.assignee,
+                    "due_date": t.due_date.strftime("%Y-%m-%d"),
+                    "priority": t.priority,
+                    "status": t.status
+                } for t in tasks
+            ]
         }
 
         if redis_client:
@@ -1118,6 +1129,144 @@ def add_defect(
         return success_response({"id": new_defect.id})
     except Exception as e:
         logger.error(f"Add defect error: {e}")
+        return error_response(str(e), code="DB_ERROR")
+    finally:
+        db.close()
+
+# ========== NEW: Endpoints للمهام ==========
+@app.post("/tasks/{project_id}")
+def create_task(
+    project_id: int,
+    description: str,
+    assignee: str,
+    due_date: str,  # YYYY-MM-DD
+    priority: str,
+    status: str = "قيد الانتظار",
+    current_user: User = Depends(get_current_active_user)
+):
+    db_check = SessionLocal()
+    try:
+        project_user = db_check.query(ProjectUser).filter(
+            ProjectUser.project_id == project_id,
+            ProjectUser.user_id == current_user.id
+        ).first()
+        if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
+    finally:
+        db_check.close()
+
+    db = SessionLocal()
+    try:
+        task = Task(
+            project_id=project_id,
+            description=description,
+            assignee=assignee,
+            due_date=datetime.strptime(due_date, "%Y-%m-%d").date(),
+            priority=priority,
+            status=status
+        )
+        db.add(task)
+        db.commit()
+        return success_response({"id": task.id})
+    except Exception as e:
+        logger.error(f"Create task error: {e}")
+        return error_response(str(e), code="DB_ERROR")
+    finally:
+        db.close()
+
+@app.get("/tasks/{project_id}")
+def get_tasks(
+    project_id: int,
+    current_user: User = Depends(get_current_active_user)
+):
+    db_check = SessionLocal()
+    try:
+        project_user = db_check.query(ProjectUser).filter(
+            ProjectUser.project_id == project_id,
+            ProjectUser.user_id == current_user.id
+        ).first()
+        if current_user.role != "admin" and not project_user:
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
+    finally:
+        db_check.close()
+
+    db = SessionLocal()
+    try:
+        tasks = db.query(Task).filter(Task.project_id == project_id).all()
+        return success_response([
+            {
+                "id": t.id,
+                "description": t.description,
+                "assignee": t.assignee,
+                "due_date": t.due_date.strftime("%Y-%m-%d"),
+                "priority": t.priority,
+                "status": t.status
+            } for t in tasks
+        ])
+    finally:
+        db.close()
+
+@app.put("/tasks/{task_id}")
+def update_task(
+    task_id: int,
+    description: str = None,
+    assignee: str = None,
+    due_date: str = None,
+    priority: str = None,
+    status: str = None,
+    current_user: User = Depends(get_current_active_user)
+):
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            return error_response("Task not found", code="NOT_FOUND", status_code=404)
+        # Check permission
+        project_user = db.query(ProjectUser).filter(
+            ProjectUser.project_id == task.project_id,
+            ProjectUser.user_id == current_user.id
+        ).first()
+        if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
+        if description is not None:
+            task.description = description
+        if assignee is not None:
+            task.assignee = assignee
+        if due_date is not None:
+            task.due_date = datetime.strptime(due_date, "%Y-%m-%d").date()
+        if priority is not None:
+            task.priority = priority
+        if status is not None:
+            task.status = status
+        db.commit()
+        return success_response(True)
+    except Exception as e:
+        logger.error(f"Update task error: {e}")
+        return error_response(str(e), code="DB_ERROR")
+    finally:
+        db.close()
+
+@app.delete("/tasks/{task_id}")
+def delete_task(
+    task_id: int,
+    current_user: User = Depends(get_current_active_user)
+):
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            return error_response("Task not found", code="NOT_FOUND", status_code=404)
+        project_user = db.query(ProjectUser).filter(
+            ProjectUser.project_id == task.project_id,
+            ProjectUser.user_id == current_user.id
+        ).first()
+        if current_user.role != "admin" and (not project_user or project_user.permission not in ["write", "admin"]):
+            return error_response("Not enough permissions", code="FORBIDDEN", status_code=403)
+        db.delete(task)
+        db.commit()
+        return success_response(True)
+    except Exception as e:
+        logger.error(f"Delete task error: {e}")
         return error_response(str(e), code="DB_ERROR")
     finally:
         db.close()
