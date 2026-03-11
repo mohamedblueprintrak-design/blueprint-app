@@ -50,11 +50,7 @@ if "user" not in st.session_state:
 if "currency" not in st.session_state:
     st.session_state.currency = "EGP"
 if "tasks" not in st.session_state:
-    # تحديث المهام الافتراضية لاستخدام المفتاح الموحد "تاريخ التسليم"
-    st.session_state.tasks = [
-        {"المهمة": "صب قواعد المحور A-G", "المسؤول": "م. أحمد", "تاريخ التسليم": "2026-03-15", "الأولوية": "عالية", "الحالة": "جاري"},
-        {"المهمة": "استلام حديد الأعمدة", "المسؤول": "م. سارة", "تاريخ التسليم": "2026-03-12", "الأولوية": "عالية", "الحالة": "متأخر"},
-    ]
+    st.session_state.tasks = []
 
 def switch_lang():
     st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
@@ -1054,7 +1050,7 @@ with tabs[5]:
                         # تخزين PDF وتاريخ التقرير في session_state
                         st.session_state["generated_pdf"] = pdf_bytes
                         st.session_state["generated_pdf_name"] = f"daily_report_{project_id}_{report_date}.pdf"
-                        st.session_state["generated_pdf_date"] = report_date  # لحفظ التاريخ لاستخدامه في الواتساب
+                        st.session_state["generated_pdf_date"] = report_date
                         st.success(tr("✅ تم إنشاء التقرير بنجاح", "✅ Report generated successfully"))
                     else:
                         st.error(tr("❌ فشل إنشاء التقرير", "❌ Failed to generate report"))
@@ -1063,7 +1059,7 @@ with tabs[5]:
         
         # عرض أزرار التحميل والواتساب إذا كان هناك PDF في session_state
         if "generated_pdf" in st.session_state and st.session_state["generated_pdf"] is not None:
-            col_dl, col_wa, _ = st.columns([1, 1, 3])  # تخصيص المساحة
+            col_dl, col_wa, _ = st.columns([1, 1, 3])
             with col_dl:
                 st.download_button(
                     label=tr("⬇️ تحميل التقرير", "⬇️ Download Report"),
@@ -1073,14 +1069,12 @@ with tabs[5]:
                     key="download_pdf_btn"
                 )
             with col_wa:
-                # إعداد رسالة واتساب
                 report_date_str = st.session_state.get("generated_pdf_date", datetime.now()).strftime("%Y-%m-%d")
                 wa_text = f"تم إنشاء تقرير موقع لمشروع {data['project_info']['name']} بتاريخ {report_date_str}. يمكنك تحميله من المنصة."
                 encoded_text = urllib.parse.quote(wa_text)
                 wa_link = f"https://wa.me/?text={encoded_text}"
                 st.link_button(tr("📱 مشاركة عبر واتساب", "📱 Share on WhatsApp"), wa_link, use_container_width=True)
             
-            # زر مسح التقرير من الذاكرة
             if st.button(tr("مسح التقرير من الذاكرة", "Clear report from memory")):
                 st.session_state["generated_pdf"] = None
                 st.session_state["generated_pdf_date"] = None
@@ -1157,7 +1151,6 @@ with tabs[5]:
     st.markdown("---")
     st.subheader(tr("📋 التقارير السابقة", "📋 Previous Reports"))
     
-    # -------------------- عرض الزيارات السابقة --------------------
     try:
         visits_resp = requests.get(f"{BACKEND}/site_visits/{project_id}", headers=get_headers())
         if visits_resp.ok:
@@ -1172,7 +1165,6 @@ with tabs[5]:
                         if visit.get('notes'):
                             st.caption(visit['notes'])
                         if visit.get('images'):
-                            # عرض الصور مع إمكانية التكبير
                             for img in visit['images']:
                                 st.image(img['path'], width=150, caption=img.get('caption', ''))
                         st.markdown("---")
@@ -1236,12 +1228,9 @@ with tabs[6]:
             except Exception as e:
                 st.error(f"⚠️ {str(e)}")
 
-# ========== مهام المهندس (Tasks) مع تحسينات ==========
+# ========== مهام المهندس (Tasks) مع تحسينات (حقل إدخال نصي للمهندس) ==========
 with tabs[7]:
     st.subheader(tr("📋 إدارة مهام المهندسين", "📋 Engineer Tasks"))
-    
-    # قائمة المهندسين (يمكنك تعديلها)
-    engineers = ["م. أحمد", "م. سارة", "م. خالد", "م. محمد", "م. علي", "م. فاطمة"]
     
     # حالات المهمة الممكنة
     task_statuses = ["قيد الانتظار", "جاري", "منتهية"]
@@ -1252,13 +1241,14 @@ with tabs[7]:
         with st.form("task_form", clear_on_submit=True):
             st.markdown("### ➕ إضافة مهمة جديدة")
             t_desc = st.text_input(tr("وصف المهمة", "Task description"), key="task_desc")
-            t_ass = st.selectbox(tr("المهندس", "Engineer"), engineers, key="task_ass")
+            # تم التعديل هنا: من selectbox إلى text_input
+            t_ass = st.text_input(tr("اسم المهندس", "Engineer name"), key="task_ass")
             t_date = st.date_input(tr("تاريخ التسليم", "Deadline"), value=date.today(), key="task_date")
             t_prio = st.select_slider(tr("الأولوية", "Priority"), options=["منخفضة", "متوسطة", "عالية"], value="متوسطة", key="task_prio")
             t_status = st.selectbox(tr("الحالة", "Status"), task_statuses, index=0, key="task_status")
             
             submitted = st.form_submit_button(tr("➕ إضافة مهمة", "➕ Add task"))
-            if submitted and t_desc:
+            if submitted and t_desc and t_ass:
                 if "tasks" not in st.session_state:
                     st.session_state.tasks = []
                 
@@ -1279,20 +1269,14 @@ with tabs[7]:
         if "tasks" in st.session_state and st.session_state.tasks:
             st.markdown("### 📋 قائمة المهام")
             
-            # عرض المهام في جدول مع أزرار لتحديث الحالة
             for i, task in enumerate(st.session_state.tasks):
-                # التأكد من أن المفتاح "تاريخ التسليم" موجود، وإذا كان قديماً (باستخدام "التاريخ") نقوم بتحديثه
-                if "التاريخ" in task and "تاريخ التسليم" not in task:
-                    task["تاريخ التسليم"] = task["التاريخ"]  # نقل القيمة
-                # الآن نستخدم المفتاح الموحد
                 cols = st.columns([3, 1, 1, 1, 1])
                 with cols[0]:
                     st.write(f"**{task['المهمة']}**")
                     st.caption(f"{task['المسؤول']} | أولوية: {task['الأولوية']}")
                 with cols[1]:
-                    st.write(f"تسليم: {task.get('تاريخ التسليم', 'غير محدد')}")
+                    st.write(f"تسليم: {task['تاريخ التسليم']}")
                 with cols[2]:
-                    # عرض الحالة بشكل ملون
                     status_color = {
                         "قيد الانتظار": "🟡",
                         "جاري": "🔵",
@@ -1300,7 +1284,6 @@ with tabs[7]:
                     }.get(task['الحالة'], "⚪")
                     st.write(f"{status_color} {task['الحالة']}")
                 with cols[3]:
-                    # زر لتغيير الحالة إلى التالية
                     if task['الحالة'] != "منتهية":
                         next_status = "جاري" if task['الحالة'] == "قيد الانتظار" else "منتهية"
                         if st.button(f"⏩ {next_status}", key=f"status_{i}"):
@@ -1309,13 +1292,11 @@ with tabs[7]:
                     else:
                         st.write("---")
                 with cols[4]:
-                    # زر لحذف المهمة
                     if st.button("🗑️", key=f"del_{i}"):
                         st.session_state.tasks.pop(i)
                         st.rerun()
                 st.markdown("---")
             
-            # إحصائيات سريعة
             col_stat1, col_stat2, col_stat3 = st.columns(3)
             with col_stat1:
                 st.metric("إجمالي المهام", len(st.session_state.tasks))
@@ -1326,7 +1307,6 @@ with tabs[7]:
                 completed = sum(1 for t in st.session_state.tasks if t['الحالة'] == "منتهية")
                 st.metric("منتهية", completed)
             
-            # زر لحذف جميع المهام المنتهية
             if st.button(tr("🗑️ حذف المنتهية", "🗑️ Clear completed")):
                 st.session_state.tasks = [t for t in st.session_state.tasks if t['الحالة'] != "منتهية"]
                 st.rerun()
