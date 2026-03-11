@@ -2,7 +2,7 @@ import sys
 import os
 sys.stdout.reconfigure(encoding='utf-8')
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, JSON, Float, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, JSON, Float, Boolean, Date
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 from passlib.context import CryptContext
@@ -65,6 +65,7 @@ class Project(Base):
     site_visits = relationship("SiteVisit", back_populates="project", cascade="all, delete-orphan")
     memory_entries = relationship("MemoryEntry", back_populates="project", cascade="all, delete-orphan")
     workflows = relationship("Workflow", back_populates="project", cascade="all, delete-orphan")
+    tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")  # NEW
 
 # ---------- التحليلات ----------
 class Analysis(Base):
@@ -207,6 +208,21 @@ class WorkflowLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     workflow = relationship("Workflow")
+
+# ---------- المهام (NEW) ----------
+class Task(Base):
+    __tablename__ = "tasks"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), index=True)
+    description = Column(String, nullable=False)
+    assignee = Column(String, nullable=False)
+    due_date = Column(Date, nullable=False)
+    priority = Column(String, nullable=False)  # منخفضة، متوسطة، عالية
+    status = Column(String, default="قيد الانتظار")  # قيد الانتظار، جاري، منتهية
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    project = relationship("Project", back_populates="tasks")
 
 # ---------- دالة تهيئة قاعدة البيانات ----------
 def init_db():
