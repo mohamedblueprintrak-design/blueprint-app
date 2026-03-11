@@ -30,14 +30,20 @@ async def route_request(text=None, file_bytes=None, file_type=None, project_id=N
     if project_id:
         update_unit_prices_from_db(project_id)
     
+    # طباعة لتأكيد وصول الطلب
+    print(f"\n🟡 [route_request] Received text: {text}")
+    
     # التوجيه المباشر للكمرات
     if text and ("كمرة" in text or "beam" in text.lower()):
+        print(f"🟢 [route_request] Direct beam detection triggered")
         nums = re.findall(r"[-+]?\d*\.\d+|\d+", text)
         results = struct_agent.analyze(text, nums)
         return {"task": "beam_tool", "results": results, "domain": "design"}
     
     # تصنيف الطلب
     classification = classify_request(text, file_type)
+    print(f"🟡 [route_request] Classification result: {classification}")
+    
     task = classification.get("task", "chat")
     domain = classification.get("domain", "general")
     
@@ -58,6 +64,7 @@ async def route_request(text=None, file_bytes=None, file_type=None, project_id=N
             logger.error(f"Knowledge retrieval failed: {e}")
 
     if domain == "design":
+        print(f"🟢 [route_request] Domain is DESIGN, calling struct_agent...")
         results = struct_agent.analyze(text, nums)
         if results:
             enhanced_summary_prompt = f"{knowledge_context}\n\nلخص النتائج الهندسية التالية:\n{json.dumps(results)}"
