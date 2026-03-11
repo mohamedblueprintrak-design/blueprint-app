@@ -15,6 +15,22 @@ import os
 import urllib.parse
 import tempfile
 import asyncio
+import base64
+from PIL import Image
+import io
+
+def display_image_from_base64(base64_str):
+    """عرض صورة من نص base64"""
+    try:
+        if base64_str and isinstance(base64_str, str):
+            image_bytes = base64.b64decode(base64_str)
+            image = Image.open(io.BytesIO(image_bytes))
+            st.image(image, caption="رسم توضيحي للقطاع", use_container_width=True)
+            return True
+    except Exception as e:
+        st.error(f"خطأ في عرض الصورة: {e}")
+        return False
+    return False
 
 # استيراد مزود LLM لاستخدامه في اختبار النماذج
 from llm_provider import llm
