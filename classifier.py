@@ -6,7 +6,7 @@ from llm_provider import llm
 logger = logging.getLogger("classifier")
 
 async def classify_with_llm(text):
-    """استخدام LLM لتصنيف النص"""
+    """استخدام LLM لتصنيف النص (دقة عالية)"""
     prompt = f"""
     أنت مساعد ذكي لتصنيف استفسارات المستخدم في نظام هندسي. قم بتحليل النص التالي وإرجاع JSON بالشكل التالي:
     {{
@@ -19,6 +19,7 @@ async def classify_with_llm(text):
     المخرجات بصيغة JSON فقط.
     """
     try:
+        # استخدام نموذج سريع ورخيص لهذه المهمة
         response = await llm.generate_text(prompt, model_preference=["gpt-4o-mini", "gemini-flash", "mistral-small"])
         # استخراج JSON من الرد
         json_match = re.search(r'\{.*\}', response, re.DOTALL)
@@ -42,46 +43,47 @@ def classify_request(text=None, file_bytes=None, file_type=None):
     if not text:
         return {"task": "general_chat", "domain": "general"}
 
-    # محاولة التصنيف باستخدام LLM (إذا كان النص طويلاً أو غير واضح)
-    if len(text) > 15:
-        try:
-            import asyncio
-            llm_result = asyncio.run(classify_with_llm(text))
-            if llm_result and "task" in llm_result and "domain" in llm_result:
-                logger.info(f"LLM classification: {llm_result}")
-                return llm_result
-        except Exception as e:
-            logger.warning(f"LLM classification failed, falling back to rules: {e}")
+    # محاولة التصنيف باستخدام LLM (دقة عالية)
+    try:
+        import asyncio
+        # نستخدم حلقة حدث جديدة أو الحالية
+        loop = asyncio.get_event_loop()
+        llm_result = loop.run_until_complete(classify_with_llm(text))
+        if llm_result and "task" in llm_result and "domain" in llm_result:
+            logger.info(f"LLM classification: {llm_result}")
+            return llm_result
+    except Exception as e:
+        logger.warning(f"LLM classification failed, falling back to rules: {e}")
 
-    # التصنيف بالقواعد (Fallback)
+    # التصنيف بالقواعد (Fallback) - محسن ليشمل كلمات أكثر
     t = text.lower()
 
     # أدوات الموقع
-    if "تشك ليست" in t or "checklist" in t or "استلام" in t:
+    if any(word in t for word in ["تشك ليست", "checklist", "استلام", "مراجعة", "معاينة"]):
         return {"task": "checklist_tool", "domain": "site"}
-    if "تقرير موقع" in t or "تقرير يومي" in t:
+    if any(word in t for word in ["تقرير موقع", "تقرير يومي", "تسجيل يومي", "حالة الطقس", "عدد العمال"]):
         return {"task": "site_report", "domain": "site"}
 
-    # الحصر
-    if "حصر" in t or "كمية" in t or "حديد" in t or "خرسانة" in t or "بلوك" in t or "أسمنت" in t or "رمل" in t or "سن" in t:
+    # الحصر (BOQ) - نوسع الكلمات المفتاحية
+    boq_keywords = ["حصر", "كمية", "كميات", "حديد", "خرسانة", "بلوك", "أسمنت", "رمل", "سن", "طوب", "نحسب", "حساب", "تكلفة", "سعر"]
+    if any(word in t for word in boq_keywords):
         return {"task": "boq_tool", "domain": "boq"}
 
     # التصميم
-    if "بلاطة" in t or "سقف" in t:
-        return {"task": "slab_tool", "domain": "design"}
-    if "عمود" in t:
-        return {"task": "column_tool", "domain": "design"}
-    if "كمرة" in t or "تحليل كمرة" in t:
-        return {"task": "beam_tool", "domain": "design"}
-    if "أساس" in t or "قاعدة" in t:
-        return {"task": "foundation_tool", "domain": "design"}
-    if "جدار استنادي" in t:
-        return {"task": "retaining_wall_tool", "domain": "design"}
-    if "سلم" in t:
-        return {"task": "stair_tool", "domain": "design"}
+    design_keywords = {
+        "بلاطة": "slab_tool", "سقف": "slab_tool",
+        "عمود": "column_tool",
+        "كمرة": "beam_tool", "ميدة": "beam_tool",
+        "أساس": "foundation_tool", "قاعدة": "foundation_tool",
+        "جدار استنادي": "retaining_wall_tool",
+        "سلم": "stair_tool"
+    }
+    for word, task in design_keywords.items():
+        if word in t:
+            return {"task": task, "domain": "design"}
 
     # استدعاء الذكاء الاصطناعي العام
-    if "اسأل الذكاء" in t or "openai" in t or "ai" in t:
+    if any(word in t for word in ["اسأل الذكاء", "openai", "ai", "blue", "اسال", "سؤال"]):
         return {"task": "ask_ai", "domain": "ai"}
 
     return {"task": "general_chat", "domain": "general"}
