@@ -1,6 +1,6 @@
 """
 BluePrint Engineering Consultancy - AI-Powered Engineering OS
-الواجهة النهائية - جميع الوظائف + مهام المهندس + العملة + دائرة الصحة + اختبار النماذج
+الواجهة النهائية - جميع الوظائف + مهام المهندس + العملة + دائرة الصحة + اختبار النماذج + مهام دائمة
 """
 
 import streamlit as st
@@ -36,7 +36,8 @@ pwa_html = """
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
-BACKEND = "http://localhost:8000"  # غير الرابط حسب الحاجة
+# قراءة رابط الـ Backend من متغيرات البيئة، مع الاحتفاظ بـ localhost كاحتياطي للتشغيل المحلي
+BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 # تهيئة Session State
 if "msgs" not in st.session_state:
@@ -53,8 +54,7 @@ if "user" not in st.session_state:
     st.session_state.user = None
 if "currency" not in st.session_state:
     st.session_state.currency = "EGP"
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
+# tasks لم نعد نخزنها في session_state بل نجلبها من الـ API
 
 def switch_lang():
     st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
@@ -698,7 +698,7 @@ tab_names = [
     tr("📍 تقارير الموقع", "📍 Site Reports"),
     tr("📚 قاعدة معرفية", "📚 Knowledge Base"),
     tr("📋 مهام المهندس", "📋 Tasks"),
-    tr("🧪 اختبار النماذج", "🧪 Model Testing")  # تبويب جديد
+    tr("🧪 اختبار النماذج", "🧪 Model Testing")
 ]
 tabs = st.tabs(tab_names)
 
@@ -1233,12 +1233,29 @@ with tabs[6]:
             except Exception as e:
                 st.error(f"⚠️ {str(e)}")
 
-# ========== مهام المهندس (Tasks) مع تحسينات ==========
+# ========== مهام المهندس (Tasks) - مرتبطة بقاعدة البيانات ==========
 with tabs[7]:
     st.subheader(tr("📋 إدارة مهام المهندسين", "📋 Engineer Tasks"))
     
     # حالات المهمة الممكنة
     task_statuses = ["قيد الانتظار", "جاري", "منتهية"]
+    
+    # دالة لجلب المهام من الـ API
+    def fetch_tasks():
+        try:
+            r = requests.get(f"{BACKEND}/tasks/{project_id}", headers=get_headers())
+            if r.ok:
+                data = r.json()
+                if data.get("success"):
+                    return data["data"]
+            return []
+        except:
+            return []
+    
+    # جلب المهام عند تحميل الصفحة أو عند تغيير المشروع
+    if "tasks_data" not in st.session_state or st.session_state.get("last_project_id") != project_id:
+        st.session_state.tasks_data = fetch_tasks()
+        st.session_state.last_project_id = project_id
     
     col1, col2 = st.columns([1, 2])
     
@@ -1246,7 +1263,6 @@ with tabs[7]:
         with st.form("task_form", clear_on_submit=True):
             st.markdown("### ➕ إضافة مهمة جديدة")
             t_desc = st.text_input(tr("وصف المهمة", "Task description"), key="task_desc")
-            # تم التعديل هنا: من selectbox إلى text_input
             t_ass = st.text_input(tr("اسم المهندس", "Engineer name"), key="task_ass")
             t_date = st.date_input(tr("تاريخ التسليم", "Deadline"), value=date.today(), key="task_date")
             t_prio = st.select_slider(tr("الأولوية", "Priority"), options=["منخفضة", "متوسطة", "عالية"], value="متوسطة", key="task_prio")
@@ -1254,66 +1270,102 @@ with tabs[7]:
             
             submitted = st.form_submit_button(tr("➕ إضافة مهمة", "➕ Add task"))
             if submitted and t_desc and t_ass:
-                if "tasks" not in st.session_state:
-                    st.session_state.tasks = []
-                
-                new_task = {
-                    "id": len(st.session_state.tasks) + 1,
-                    "المهمة": t_desc,
-                    "المسؤول": t_ass,
-                    "تاريخ التسليم": t_date.strftime("%Y-%m-%d"),
-                    "الأولوية": t_prio,
-                    "الحالة": t_status,
-                    "تاريخ الإنشاء": datetime.now().strftime("%Y-%m-%d %H:%M")
-                }
-                st.session_state.tasks.append(new_task)
-                st.success(tr("✅ تمت الإضافة", "✅ Added"))
-                st.rerun()
+                # إرسال المهمة إلى الـ API
+                try:
+                    r = requests.post(
+                        f"{BACKEND}/tasks/{project_id}",
+                        params={
+                            "description": t_desc,
+                            "assignee": t_ass,
+                            "due_date": t_date.strftime("%Y-%m-%d"),
+                            "priority": t_prio,
+                            "status": t_status
+                        },
+                        headers=get_headers()
+                    )
+                    if r.ok:
+                        data = r.json()
+                        if data.get("success"):
+                            st.success(tr("✅ تمت الإضافة", "✅ Added"))
+                            # إعادة جلب المهام
+                            st.session_state.tasks_data = fetch_tasks()
+                            st.rerun()
+                        else:
+                            st.error(data.get("error", {}).get("message", "❌ فشل الإضافة"))
+                    else:
+                        st.error(f"❌ فشل الإضافة: {r.status_code}")
+                except Exception as e:
+                    st.error(f"❌ خطأ: {str(e)}")
     
     with col2:
-        if "tasks" in st.session_state and st.session_state.tasks:
+        if st.session_state.tasks_data:
             st.markdown("### 📋 قائمة المهام")
             
-            for i, task in enumerate(st.session_state.tasks):
+            for i, task in enumerate(st.session_state.tasks_data):
                 cols = st.columns([3, 1, 1, 1, 1])
                 with cols[0]:
-                    st.write(f"**{task['المهمة']}**")
-                    st.caption(f"{task['المسؤول']} | أولوية: {task['الأولوية']}")
+                    st.write(f"**{task['description']}**")
+                    st.caption(f"{task['assignee']} | أولوية: {task['priority']}")
                 with cols[1]:
-                    st.write(f"تسليم: {task['تاريخ التسليم']}")
+                    st.write(f"تسليم: {task['due_date']}")
                 with cols[2]:
                     status_color = {
                         "قيد الانتظار": "🟡",
                         "جاري": "🔵",
                         "منتهية": "✅"
-                    }.get(task['الحالة'], "⚪")
-                    st.write(f"{status_color} {task['الحالة']}")
+                    }.get(task['status'], "⚪")
+                    st.write(f"{status_color} {task['status']}")
                 with cols[3]:
-                    if task['الحالة'] != "منتهية":
-                        next_status = "جاري" if task['الحالة'] == "قيد الانتظار" else "منتهية"
-                        if st.button(f"⏩ {next_status}", key=f"status_{i}"):
-                            st.session_state.tasks[i]['الحالة'] = next_status
-                            st.rerun()
+                    if task['status'] != "منتهية":
+                        next_status = "جاري" if task['status'] == "قيد الانتظار" else "منتهية"
+                        if st.button(f"⏩ {next_status}", key=f"status_{task['id']}"):
+                            # تحديث الحالة عبر API
+                            try:
+                                r = requests.put(
+                                    f"{BACKEND}/tasks/{task['id']}",
+                                    params={"status": next_status},
+                                    headers=get_headers()
+                                )
+                                if r.ok:
+                                    # إعادة جلب المهام
+                                    st.session_state.tasks_data = fetch_tasks()
+                                    st.rerun()
+                            except:
+                                pass
                     else:
                         st.write("---")
                 with cols[4]:
-                    if st.button("🗑️", key=f"del_{i}"):
-                        st.session_state.tasks.pop(i)
-                        st.rerun()
+                    if st.button("🗑️", key=f"del_{task['id']}"):
+                        # حذف المهمة عبر API
+                        try:
+                            r = requests.delete(f"{BACKEND}/tasks/{task['id']}", headers=get_headers())
+                            if r.ok:
+                                st.session_state.tasks_data = fetch_tasks()
+                                st.rerun()
+                        except:
+                            pass
                 st.markdown("---")
             
+            # إحصائيات سريعة
             col_stat1, col_stat2, col_stat3 = st.columns(3)
             with col_stat1:
-                st.metric("إجمالي المهام", len(st.session_state.tasks))
+                st.metric("إجمالي المهام", len(st.session_state.tasks_data))
             with col_stat2:
-                pending = sum(1 for t in st.session_state.tasks if t['الحالة'] == "قيد الانتظار")
+                pending = sum(1 for t in st.session_state.tasks_data if t['status'] == "قيد الانتظار")
                 st.metric("قيد الانتظار", pending)
             with col_stat3:
-                completed = sum(1 for t in st.session_state.tasks if t['الحالة'] == "منتهية")
+                completed = sum(1 for t in st.session_state.tasks_data if t['status'] == "منتهية")
                 st.metric("منتهية", completed)
             
+            # زر لحذف جميع المهام المنتهية
             if st.button(tr("🗑️ حذف المنتهية", "🗑️ Clear completed")):
-                st.session_state.tasks = [t for t in st.session_state.tasks if t['الحالة'] != "منتهية"]
+                for task in st.session_state.tasks_data:
+                    if task['status'] == "منتهية":
+                        try:
+                            requests.delete(f"{BACKEND}/tasks/{task['id']}", headers=get_headers())
+                        except:
+                            pass
+                st.session_state.tasks_data = fetch_tasks()
                 st.rerun()
         else:
             st.info(tr("لا توجد مهام. أضف مهمة جديدة من اليسار.", "No tasks. Add a new task from the left."))
