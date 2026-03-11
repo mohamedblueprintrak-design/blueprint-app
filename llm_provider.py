@@ -185,6 +185,8 @@ class LLMProvider:
     async def generate_text(self, prompt, model_preference=None):
         if model_preference is None:
             model_preference = [
+                "gpt-4o-mini",      # تمت الإضافة
+                "gemini-flash",      # تمت الإضافة
                 "huggingface-llama-3.2-3b",
                 "huggingface-llama-3.1-8b",
                 "huggingface-mistral-7b",
