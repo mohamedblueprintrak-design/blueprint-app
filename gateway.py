@@ -1,6 +1,6 @@
 """
 BluePrint Engineering Consultancy - AI-Powered Engineering OS
-الواجهة النهائية - جميع الوظائف + مهام المهندس + العملة + دائرة الصحة
+الواجهة النهائية - جميع الوظائف + مهام المهندس + العملة + دائرة الصحة + اختبار النماذج
 """
 
 import streamlit as st
@@ -14,6 +14,10 @@ import time
 import os
 import urllib.parse
 import tempfile
+import asyncio
+
+# استيراد مزود LLM لاستخدامه في اختبار النماذج
+from llm_provider import llm
 
 st.set_page_config(
     page_title="BluePrint | Engineering Consultancy",
@@ -693,7 +697,8 @@ tab_names = [
     tr("📋 الأرشيف", "📋 Archive"),
     tr("📍 تقارير الموقع", "📍 Site Reports"),
     tr("📚 قاعدة معرفية", "📚 Knowledge Base"),
-    tr("📋 مهام المهندس", "📋 Tasks")
+    tr("📋 مهام المهندس", "📋 Tasks"),
+    tr("🧪 اختبار النماذج", "🧪 Model Testing")  # تبويب جديد
 ]
 tabs = st.tabs(tab_names)
 
@@ -1228,7 +1233,7 @@ with tabs[6]:
             except Exception as e:
                 st.error(f"⚠️ {str(e)}")
 
-# ========== مهام المهندس (Tasks) مع تحسينات (حقل إدخال نصي للمهندس) ==========
+# ========== مهام المهندس (Tasks) مع تحسينات ==========
 with tabs[7]:
     st.subheader(tr("📋 إدارة مهام المهندسين", "📋 Engineer Tasks"))
     
@@ -1312,6 +1317,86 @@ with tabs[7]:
                 st.rerun()
         else:
             st.info(tr("لا توجد مهام. أضف مهمة جديدة من اليسار.", "No tasks. Add a new task from the left."))
+
+# ========== تبويب اختبار النماذج ==========
+with tabs[8]:
+    st.subheader(tr("🧪 اختبار النماذج الذكية", "🧪 AI Models Testing"))
+    
+    st.markdown("""
+    هذه الأداة تساعدك في معرفة أي من النماذج المضافة في ملف `llm_provider.py` يعمل بشكل صحيح مع مفاتيح API الحالية.
+    اضغط على زر **اختبار** بجانب كل نموذج لفحصه.
+    """)
+    
+    # قائمة النماذج الرئيسية التي نريد اختبارها
+    models_to_test = [
+        "gpt-4o-mini",
+        "gemini-flash",
+        "gemini",
+        "mistral-small",
+        "mistral-medium",
+        "mistral-large",
+        "deepseek-free",
+        "openrouter-llama32-3b",
+        "openrouter-gemma3-4b",
+        "openrouter-zai-glm",
+        "huggingface-llama-3.2-3b",
+        "huggingface-llama-3.1-8b",
+        "huggingface-mistral-7b",
+        "huggingface-gemma-2-2b",
+        "huggingface-qwen-2.5-7b"
+    ]
+    
+    # تخزين نتائج الاختبار في session_state
+    if "model_test_results" not in st.session_state:
+        st.session_state.model_test_results = {}
+    
+    # وظيفة لاختبار نموذج واحد
+    async def test_single_model(model_name):
+        prompt = "قل 'مرحباً' فقط"
+        try:
+            response = await llm.generate_text(prompt, model_preference=[model_name])
+            if response and not response.startswith("⚠️"):
+                return "✅ نعم", response[:50]
+            else:
+                return "❌ لا", response[:50]
+        except Exception as e:
+            return "❌ خطأ", str(e)[:50]
+    
+    # عرض النماذج في جدول
+    for model_name in models_to_test:
+        with st.container():
+            cols = st.columns([2, 1, 2])
+            with cols[0]:
+                st.write(f"**{model_name}**")
+            with cols[1]:
+                # عرض النتيجة السابقة إن وجدت
+                if model_name in st.session_state.model_test_results:
+                    result, msg = st.session_state.model_test_results[model_name]
+                    if "✅" in result:
+                        st.success(result)
+                    else:
+                        st.error(result)
+                else:
+                    st.write("⏳ لم يختبر بعد")
+            with cols[2]:
+                if st.button(tr("اختبار", "Test"), key=f"test_{model_name}"):
+                    with st.spinner(f"جاري اختبار {model_name}..."):
+                        # تشغيل الاختبار غير المتزامن
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        result, msg = loop.run_until_complete(test_single_model(model_name))
+                        loop.close()
+                        st.session_state.model_test_results[model_name] = (result, msg)
+                        st.rerun()
+            if model_name in st.session_state.model_test_results:
+                with cols[2]:
+                    st.caption(st.session_state.model_test_results[model_name][1])
+            st.markdown("---")
+    
+    # زر لمسح جميع النتائج
+    if st.button(tr("🔄 إعادة تعيين الاختبارات", "🔄 Reset Tests")):
+        st.session_state.model_test_results = {}
+        st.rerun()
 
 # تذييل الصفحة
 st.markdown("<br><hr style='border-color:#334155;'><center style='color: #cbd5e1;'>BluePrint AI v3.0 | 2026</center>", unsafe_allow_html=True)
