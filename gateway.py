@@ -39,7 +39,7 @@ pwa_html = """
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
-# قراءة رابط الـ Backend من متغيرات البيئة، مع الاحتفاظ بـ localhost كاحتياطي للتشغيل المحلي
+# قراءة رابط الـ Backend من متغيرات البيئة
 BACKEND = os.getenv("BACKEND_URL", "https://mohamedhuggig-blueprint-api.hf.space")
 
 # تهيئة Session State
@@ -52,12 +52,19 @@ if "language" not in st.session_state:
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = False
 if "token" not in st.session_state:
-    st.session_state.token = None
+    # محاولة استعادة التوكن من query params
+    token = st.query_params.get("token", None)
+    st.session_state.token = token if token else None
 if "user" not in st.session_state:
     st.session_state.user = None
 if "currency" not in st.session_state:
     st.session_state.currency = "EGP"
-# tasks لم نعد نخزنها في session_state بل نجلبها من الـ API
+if "tasks_data" not in st.session_state:
+    st.session_state.tasks_data = []
+if "current_section" not in st.session_state:
+    # استعادة القسم الحالي من query params أو الافتراضي
+    section = st.query_params.get("section", tr("📊 لوحة المعلومات", "📊 Dashboard"))
+    st.session_state.current_section = section
 
 def switch_lang():
     st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
@@ -136,14 +143,11 @@ def display_image_from_base64(base64_str):
         return False
     return False
 
-# ========== CSS محسن (نصوص بيضاء، حقول إدخال سوداء) ==========
+# ========== CSS محسن ==========
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'Cairo', sans-serif;
-    }
+    html, body, [class*="css"] { font-family: 'Cairo', sans-serif; }
     
     .stApp {
         background-color: #1e4a7a;
@@ -154,7 +158,6 @@ st.markdown("""
         color: #ffffff;
     }
 
-    /* جعل كل النصوص بيضاء بشكل عام */
     .stApp div, .stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp span, 
     .stApp label, .stApp .stMarkdown, .stApp .stText, .stApp .stCaption {
         color: white !important;
@@ -167,14 +170,6 @@ st.markdown("""
         color: #ffffff;
     }
 
-    [data-testid="stSidebar"] .stMarkdown,
-    [data-testid="stSidebar"] .stText,
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stNumberInput label {
-        color: #ffffff !important;
-    }
-
     [data-testid="stSidebar"] .stTextInput input,
     [data-testid="stSidebar"] .stSelectbox select,
     [data-testid="stSidebar"] .stNumberInput input {
@@ -183,10 +178,6 @@ st.markdown("""
         border: 1px solid #38bdf8 !important;
         border-radius: 30px;
         padding: 0.75rem 1rem;
-    }
-    
-    [data-testid="stSidebar"] .stTextInput input::placeholder {
-        color: #6b7280;
     }
 
     .stApp .stTextInput input,
@@ -197,21 +188,6 @@ st.markdown("""
         border: 1px solid #38bdf8 !important;
         border-radius: 30px;
         padding: 0.75rem 1rem;
-    }
-
-    [data-testid="stSidebar"] .stButton > button {
-        background: rgba(255, 255, 255, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        color: white;
-        border-radius: 30px;
-        padding: 0.5rem 1.8rem;
-        font-weight: 600;
-        transition: all 0.2s;
-    }
-    
-    [data-testid="stSidebar"] .stButton > button:hover {
-        background: rgba(255, 255, 255, 0.3);
-        border-color: #38bdf8;
     }
 
     .bp-card {
@@ -232,35 +208,10 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.15);
     }
 
-    .bp-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #ffffff;
-        margin-bottom: 0.5rem;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-    }
+    .metric-icon { font-size: 1.8rem; color: #38bdf8; margin-bottom: 0.5rem; }
+    .metric-val { font-size: 2.2rem; font-weight: 700; color: #ffffff; line-height: 1.2; }
+    .metric-label { color: rgba(255, 255, 255, 0.8); font-size: 0.9rem; text-transform: uppercase; }
 
-    .metric-icon {
-        font-size: 1.8rem;
-        color: #38bdf8;
-        margin-bottom: 0.5rem;
-    }
-    
-    .metric-val {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #ffffff;
-        line-height: 1.2;
-    }
-    
-    .metric-label {
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    /* أزرار رئيسية */
     .stApp .stButton > button {
         background: linear-gradient(90deg, #0ea5e9, #2563eb);
         color: white;
@@ -271,7 +222,6 @@ st.markdown("""
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
         transition: all 0.2s;
     }
-    
     .stApp .stButton > button:hover {
         transform: translateY(-1px);
         box-shadow: 0 6px 15px rgba(14, 165, 233, 0.4);
@@ -291,68 +241,16 @@ st.markdown("""
         background: #0ea5e9;
     }
 
-    /* التبويبات */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: transparent;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    /* التبويبات العلوية (radio) */
+    .stRadio [role="radiogroup"] {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 0.5rem 1rem;
+        border-radius: 40px;
     }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: transparent;
-        color: rgba(255, 255, 255, 0.7);
-        font-weight: 500;
-        padding: 10px 20px;
-        border-radius: 8px 8px 0 0;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: rgba(255, 255, 255, 0.15);
-        color: #ffffff;
-        border-bottom: 2px solid #38bdf8;
-    }
-
-    /* جداول البيانات */
-    .stDataFrame, .stTable {
-        color: white !important;
-    }
-    
-    .stDataFrame thead tr th {
-        background-color: #1e4a7a !important;
-        color: white !important;
-    }
-    
-    .stDataFrame tbody tr td {
-        color: white !important;
-    }
-
-    @media (max-width: 768px) {
-        .chat-message {
-            max-width: 90%;
-        }
-        .bp-header {
-            font-size: 2rem;
-        }
-        .metric-card {
-            margin-bottom: 1rem;
-        }
-        .stButton button {
-            width: 100%;
-        }
-    }
-
-    /* الوضع الداكن */
-    .dark-mode .stApp {
-        background-color: #0f172a;
-    }
-    .dark-mode .bp-card {
-        background: #1e293b;
-        border-color: #334155;
-        color: #e2e8f0;
-    }
-    .dark-mode [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-    }
+    .stRadio [data-testid="stWidgetLabel"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -360,17 +258,9 @@ st.markdown("""
 if st.session_state.dark_mode:
     st.markdown("""
     <style>
-        .stApp {
-            background-color: #0f172a;
-        }
-        .bp-card {
-            background: #1e293b;
-            border-color: #334155;
-            color: #e2e8f0;
-        }
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-        }
+        .stApp { background-color: #0f172a; }
+        .bp-card { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+        [data-testid="stSidebar"] { background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -414,7 +304,10 @@ with st.sidebar:
                         if r.ok:
                             data = r.json()
                             if data.get("success"):
-                                st.session_state.token = data["data"]["access_token"]
+                                token = data["data"]["access_token"]
+                                st.session_state.token = token
+                                # حفظ التوكن في query params
+                                st.query_params["token"] = token
                                 user_r = requests.get(f"{BACKEND}/users/me", headers=get_headers())
                                 if user_r.ok:
                                     st.session_state.user = user_r.json().get("data")
@@ -463,8 +356,10 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
         if st.button(tr("🚪 تسجيل خروج", "🚪 Logout"), use_container_width=True):
+            # مسح التوكن من session_state و query params
             for key in ["token", "user", "selected_project"]:
                 st.session_state[key] = None
+            st.query_params.clear()
             st.rerun()
 
         st.markdown("---")
@@ -498,8 +393,16 @@ with st.sidebar:
                     projs = data["data"]
                     if projs:
                         proj_options = {f"{p['name']} - {p['location']}": p['id'] for p in projs}
-                        selected_label = st.selectbox(tr("اختر مشروع", "Select Project"), list(proj_options.keys()))
-                        st.session_state.selected_project = proj_options[selected_label]
+                        # تحديد المشروع الحالي في الـ Selectbox
+                        current_proj_name = next((name for name, pid in proj_options.items() if pid == st.session_state.selected_project), None)
+                        current_index = list(proj_options.keys()).index(current_proj_name) if current_proj_name else 0
+                        
+                        selected_label = st.selectbox(tr("اختر مشروع", "Select Project"), list(proj_options.keys()), index=current_index)
+                        
+                        if st.session_state.selected_project != proj_options[selected_label]:
+                            st.session_state.selected_project = proj_options[selected_label]
+                            # إعادة جلب المهام للمشروع الجديد
+                            st.rerun()
                     else:
                         st.info(tr("✨ لا توجد مشاريع", "✨ No projects"))
                 else:
@@ -566,18 +469,13 @@ with st.sidebar:
                     new_conc = st.number_input(tr("سعر الخرسانة (جنيه/م³)", "Concrete price"), value=conc_price, step=50.0)
                     new_steel = st.number_input(tr("سعر الحديد (جنيه/طن)", "Steel price"), value=steel_price, step=500.0)
                     
-                    # اختيار العملة
                     currency_options = ["EGP", "AED", "SAR", "USD", "EUR"]
                     currency_labels = {
-                        "EGP": "🇪🇬 جنيه مصري",
-                        "AED": "🇦🇪 درهم إماراتي",
-                        "SAR": "🇸🇦 ريال سعودي",
-                        "USD": "🇺🇸 دولار أمريكي",
-                        "EUR": "🇪🇺 يورو"
+                        "EGP": "🇪🇬 جنيه مصري", "AED": "🇦🇪 درهم إماراتي", "SAR": "🇸🇦 ريال سعودي",
+                        "USD": "🇺🇸 دولار أمريكي", "EUR": "🇪🇺 يورو"
                     }
                     selected_currency = st.selectbox(
-                        tr("العملة", "Currency"),
-                        currency_options,
+                        tr("العملة", "Currency"), currency_options,
                         format_func=lambda x: currency_labels.get(x, x),
                         index=currency_options.index(st.session_state.currency) if st.session_state.currency in currency_options else 0
                     )
@@ -639,7 +537,6 @@ def fetch_project_data(pid, headers):
 project_id = st.session_state.selected_project
 data = fetch_project_data(project_id, get_headers())
 if data is None:
-    # بيانات تجريبية
     data = {
         "project_info": {"name": "مشروع تجريبي", "location": "القاهرة"},
         "timeline": [],
@@ -651,16 +548,13 @@ if data is None:
 
 health_score = data.get('health_score', 50)
 
-# ========== الكارت الموحد (اسم المشروع + مؤشر الصحة) ==========
+# ========== الكارت الموحد ==========
 with st.container():
     col_left, col_right = st.columns([3, 1])
-
     with col_left:
         st.markdown(f"<h1 class='bp-header' style='font-size: 2rem; margin:0;'>🏗️ {data['project_info']['name']}</h1>", unsafe_allow_html=True)
         st.markdown(f"<p style='color: #e2e8f0;'>📍 {data['project_info']['location']} | 🕒 {tr('آخر تحديث', 'Last updated')}: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>", unsafe_allow_html=True)
-
     with col_right:
-        # عرض مؤشر الصحة
         fig = get_health_gauge(health_score)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -704,7 +598,7 @@ with col4:
 
 st.markdown("---")
 
-# ========== التبويبات ==========
+# ========== التبويبات العلوية ==========
 tab_names = [
     tr("📊 لوحة المعلومات", "📊 Dashboard"),
     tr("💬 المحادثة مع Blue", "💬 Chat with Blue"),
@@ -716,10 +610,26 @@ tab_names = [
     tr("📋 مهام المهندس", "📋 Tasks"),
     tr("🧪 اختبار النماذج", "🧪 Model Testing")
 ]
-tabs = st.tabs(tab_names)
+
+# استخدام st.radio لحفظ الحالة
+current_section = st.radio(
+    "",
+    tab_names,
+    horizontal=True,
+    index=tab_names.index(st.session_state.current_section) if st.session_state.current_section in tab_names else 0,
+    label_visibility="collapsed"
+)
+
+# إذا تغير القسم، قم بتحديث session_state و query params
+if current_section != st.session_state.current_section:
+    st.session_state.current_section = current_section
+    st.query_params["section"] = current_section
+    st.rerun()
+
+st.markdown("---")
 
 # ========== لوحة المعلومات ==========
-with tabs[0]:
+if st.session_state.current_section == tab_names[0]:
     st.markdown(f"## {tr('📈 نظرة عامة على المشروع', '📈 Project Overview')}")
     
     if data.get('boq', {}).get('items'):
@@ -743,9 +653,10 @@ with tabs[0]:
         st.info(tr("📉 لا توجد بيانات حصر كافية لإنشاء رسم بياني", "📉 No BOQ data"))
 
 # ========== المحادثة مع Blue ==========
-with tabs[1]:
+elif st.session_state.current_section == tab_names[1]:
     st.markdown(f"## {tr('💬 التحدث مع Blue', '💬 Chat with Blue')}")
     
+    # عرض الرسائل السابقة
     for msg in st.session_state.msgs:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -758,15 +669,16 @@ with tabs[1]:
             key="chat_uploader"
         )
         if uploaded_files:
-            st.success(f"✅ {len(uploaded_files)} {tr('ملف', 'file(s)')}")
+            st.success(f"✅ {len(uploaded_files)} {tr('ملف جاهز للرفع (اكتب رسالتك لتبدأ)', 'file(s) ready (type message to start)')}")
     
+    # مربع الإدخال
     prompt = st.chat_input(tr("اكتب طلبك هنا...", "Type your message..."), key="chat_main")
     
-    if prompt or uploaded_files:
-        if prompt:
-            st.session_state.msgs.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+    if prompt:
+        # إضافة رسالة المستخدم للواجهة
+        st.session_state.msgs.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
         
         with st.chat_message("assistant"):
             with st.spinner(tr("Blue يفكر...", "Blue is thinking...")):
@@ -779,9 +691,9 @@ with tabs[1]:
                         files = None
                     
                     data_payload = {
-                        "message": prompt or "",
+                        "message": prompt,
                         "project_id": project_id,
-                        "history": json.dumps(st.session_state.msgs[:-1] if prompt else st.session_state.msgs)
+                        "history": json.dumps(st.session_state.msgs[:-1])
                     }
                     
                     response = requests.post(f"{BACKEND}/process", data=data_payload, files=files, headers=get_headers(), timeout=30)
@@ -797,10 +709,8 @@ with tabs[1]:
                             else:
                                 reply = tr("لم أفهم، حاول مرة أخرى.", "I didn't understand, please try again.")
                             
-                            # عرض الرد النصي
                             st.markdown(reply)
                             
-                            # عرض الصورة إذا كانت موجودة
                             if "image_data" in results_dict:
                                 display_image_from_base64(results_dict["image_data"])
                             
@@ -818,7 +728,7 @@ with tabs[1]:
                     st.session_state.msgs.append({"role": "assistant", "content": f"⚠️ خطأ: {str(e)}"})
 
 # ========== الحصر (BOQ) ==========
-with tabs[2]:
+elif st.session_state.current_section == tab_names[2]:
     st.subheader(tr("📋 جدول الكميات والتكاليف", "📋 Bill of Quantities"))
     
     boq_items = data.get('boq', {}).get('items', [])
@@ -899,7 +809,7 @@ with tabs[2]:
                         st.error(f"❌ خطأ: {str(e)}")
 
 # ========== العيوب ==========
-with tabs[3]:
+elif st.session_state.current_section == tab_names[3]:
     st.subheader(tr("🔎 إدارة العيوب", "🔎 Defects Management"))
     
     defects = data.get('defects', [])
@@ -1014,7 +924,7 @@ with tabs[3]:
         st.info(tr("✨ لا توجد عيوب مسجلة.", "✨ No defects recorded."))
 
 # ========== الأرشيف ==========
-with tabs[4]:
+elif st.session_state.current_section == tab_names[4]:
     st.subheader(tr("📚 سجل المشروع", "📚 Project Timeline"))
     timeline = data.get('timeline', [])
     if timeline:
@@ -1025,7 +935,7 @@ with tabs[4]:
         st.info(tr("📭 لا يوجد سجل بعد.", "📭 No timeline yet."))
 
 # ========== تقارير الموقع ==========
-with tabs[5]:
+elif st.session_state.current_section == tab_names[5]:
     st.subheader(tr("📍 تقارير الموقع", "📍 Site Reports"))
     
     # -------------------- قسم إنشاء التقرير اليومي PDF --------------------
@@ -1204,7 +1114,7 @@ with tabs[5]:
         st.error(f"❌ {str(e)}")
 
 # ========== قاعدة معرفية ==========
-with tabs[6]:
+elif st.session_state.current_section == tab_names[6]:
     st.subheader(tr("📚 القاعدة المعرفية الهندسية", "📚 Engineering Knowledge Base"))
     
     kb_options = [
@@ -1256,8 +1166,8 @@ with tabs[6]:
             except Exception as e:
                 st.error(f"⚠️ {str(e)}")
 
-# ========== مهام المهندس (Tasks) - مرتبطة بقاعدة البيانات ==========
-with tabs[7]:
+# ========== مهام المهندس ==========
+elif st.session_state.current_section == tab_names[7]:
     st.subheader(tr("📋 إدارة مهام المهندسين", "📋 Engineer Tasks"))
     
     # حالات المهمة الممكنة
@@ -1386,8 +1296,8 @@ with tabs[7]:
         else:
             st.info(tr("لا توجد مهام. أضف مهمة جديدة من اليسار.", "No tasks. Add a new task from the left."))
 
-# ========== تبويب اختبار النماذج ==========
-with tabs[8]:
+# ========== اختبار النماذج ==========
+elif st.session_state.current_section == tab_names[8]:
     st.subheader(tr("🧪 اختبار النماذج الذكية", "🧪 AI Models Testing"))
     
     st.markdown("""
