@@ -20,7 +20,10 @@ from PIL import Image
 import io
 
 # استيراد مزود LLM لاستخدامه في اختبار النماذج
-from llm_provider import llm
+try:
+    from llm_provider import llm
+except ImportError:
+    llm = None
 
 st.set_page_config(
     page_title="BluePrint | Engineering Consultancy",
@@ -39,47 +42,22 @@ pwa_html = """
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
-# قراءة رابط الـ Backend من متغيرات البيئة
+# ========== قراءة رابط الـ Backend ==========
 BACKEND = os.getenv("BACKEND_URL", "https://mohamedhuggig-blueprint-api.hf.space")
 
-# تعريف دالة الترجمة في الأعلى قبل استخدامها
+# ========== دوال مساعدة (تعريفها أولاً) ==========
 def tr(text_ar, text_en):
-    return text_ar if st.session_state.language == "ar" else text_en
-
-# تهيئة Session State
-if "msgs" not in st.session_state:
-    st.session_state.msgs = []
-if "selected_project" not in st.session_state:
-    st.session_state.selected_project = None
-if "language" not in st.session_state:
-    st.session_state.language = "ar"
-if "dark_mode" not in st.session_state:
-    st.session_state.dark_mode = False
-if "token" not in st.session_state:
-    # محاولة استعادة التوكن من query params
-    token = st.query_params.get("token", None)
-    st.session_state.token = token if token else None
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "currency" not in st.session_state:
-    st.session_state.currency = "EGP"
-if "tasks_data" not in st.session_state:
-    st.session_state.tasks_data = []
-if "current_section" not in st.session_state:
-    # استعادة القسم الحالي من query params أو الافتراضي
-    section = st.query_params.get("section", tr("📊 لوحة المعلومات", "📊 Dashboard"))
-    st.session_state.current_section = section
-
-def switch_lang():
-    st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
-    st.rerun()
+    """ترجمة النصوص بين العربية والإنجليزية"""
+    return text_ar if st.session_state.get("language", "ar") == "ar" else text_en
 
 def get_headers():
-    if st.session_state.token:
+    """إرجاع headers مع التوكن إذا كان موجوداً"""
+    if st.session_state.get("token"):
         return {"Authorization": f"Bearer {st.session_state.token}"}
     return {}
 
 def get_health_color(score):
+    """تحديد لون مؤشر الصحة حسب القيمة"""
     if score >= 70:
         return "#22c55e"
     elif score >= 40:
@@ -88,7 +66,7 @@ def get_health_color(score):
         return "#ef4444"
 
 def get_health_gauge(score):
-    """إنشاء دائرة صحية باستخدام Plotly بألوان تتناسب مع السمة الزرقاء"""
+    """إنشاء دائرة صحية باستخدام Plotly"""
     color = get_health_color(score)
     
     fig = go.Figure(go.Indicator(
@@ -126,10 +104,11 @@ def get_health_gauge(score):
     return fig
 
 def format_currency(amount):
+    """تنسيق العملة مع الرمز المناسب"""
     symbols = {"EGP": "جنيه", "AED": "درهم", "SAR": "ريال", "USD": "$", "EUR": "€"}
-    sym = symbols.get(st.session_state.currency, st.session_state.currency)
+    sym = symbols.get(st.session_state.get("currency", "EGP"), st.session_state.get("currency", "EGP"))
     amt = f"{amount:,.0f}"
-    return f"{amt} {sym}" if st.session_state.language == "ar" else f"{sym} {amt}"
+    return f"{amt} {sym}" if st.session_state.get("language", "ar") == "ar" else f"{sym} {amt}"
 
 def display_image_from_base64(base64_str):
     """عرض صورة من نص base64"""
@@ -144,7 +123,44 @@ def display_image_from_base64(base64_str):
         return False
     return False
 
-# ========== CSS محسن ==========
+def safe_get_user_info():
+    """دالة آمنة لاستخراج معلومات المستخدم مع دعم القاموس والكائن"""
+    user = st.session_state.get('user')
+    if user is None:
+        return "User", "member"
+    
+    if isinstance(user, dict):
+        full_name = user.get('full_name', 'User')
+        role = user.get('role', 'member')
+    else:
+        full_name = getattr(user, 'full_name', 'User')
+        role = getattr(user, 'role', 'member')
+    
+    return full_name, role
+
+# ========== تهيئة Session State ==========
+if "msgs" not in st.session_state:
+    st.session_state.msgs = []
+if "selected_project" not in st.session_state:
+    st.session_state.selected_project = None
+if "language" not in st.session_state:
+    st.session_state.language = "ar"
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+if "token" not in st.session_state:
+    st.session_state.token = st.query_params.get("token", None)
+if "user" not in st.session_state:
+    st.session_state.user = None
+if "currency" not in st.session_state:
+    st.session_state.currency = "EGP"
+if "tasks_data" not in st.session_state:
+    st.session_state.tasks_data = []
+if "last_project_id" not in st.session_state:
+    st.session_state.last_project_id = None
+if "current_section" not in st.session_state:
+    st.session_state.current_section = st.query_params.get("section", tr("📊 لوحة المعلومات", "📊 Dashboard"))
+
+# ========== CSS محسن (شامل) ==========
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
@@ -180,6 +196,10 @@ st.markdown("""
         border-radius: 30px;
         padding: 0.75rem 1rem;
     }
+    
+    [data-testid="stSidebar"] .stTextInput input::placeholder {
+        color: #6b7280;
+    }
 
     .stApp .stTextInput input,
     .stApp .stSelectbox select,
@@ -189,6 +209,21 @@ st.markdown("""
         border: 1px solid #38bdf8 !important;
         border-radius: 30px;
         padding: 0.75rem 1rem;
+    }
+
+    [data-testid="stSidebar"] .stButton > button {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        border-radius: 30px;
+        padding: 0.5rem 1.8rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: rgba(255, 255, 255, 0.3);
+        border-color: #38bdf8;
     }
 
     .bp-card {
@@ -209,9 +244,33 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.15);
     }
 
-    .metric-icon { font-size: 1.8rem; color: #38bdf8; margin-bottom: 0.5rem; }
-    .metric-val { font-size: 2.2rem; font-weight: 700; color: #ffffff; line-height: 1.2; }
-    .metric-label { color: rgba(255, 255, 255, 0.8); font-size: 0.9rem; text-transform: uppercase; }
+    .bp-header {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 0.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .metric-icon {
+        font-size: 1.8rem;
+        color: #38bdf8;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-val {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.2;
+    }
+    
+    .metric-label {
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
 
     .stApp .stButton > button {
         background: linear-gradient(90deg, #0ea5e9, #2563eb);
@@ -223,12 +282,12 @@ st.markdown("""
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
         transition: all 0.2s;
     }
+    
     .stApp .stButton > button:hover {
         transform: translateY(-1px);
         box-shadow: 0 6px 15px rgba(14, 165, 233, 0.4);
     }
 
-    /* تحسين المحادثة */
     .stChatMessage {
         background: rgba(255, 255, 255, 0.1);
         border: 1px solid rgba(255, 255, 255, 0.2);
@@ -242,6 +301,39 @@ st.markdown("""
         background: #0ea5e9;
     }
 
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: transparent;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 500;
+        padding: 10px 20px;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        border-bottom: 2px solid #38bdf8;
+    }
+
+    .stDataFrame, .stTable {
+        color: white !important;
+    }
+    
+    .stDataFrame thead tr th {
+        background-color: #1e4a7a !important;
+        color: white !important;
+    }
+    
+    .stDataFrame tbody tr td {
+        color: white !important;
+    }
+
     /* التبويبات العلوية (radio) */
     .stRadio [role="radiogroup"] {
         display: flex;
@@ -250,8 +342,20 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.1);
         padding: 0.5rem 1rem;
         border-radius: 40px;
+        margin-bottom: 1rem;
     }
     .stRadio [data-testid="stWidgetLabel"] { display: none; }
+
+    @media (max-width: 768px) {
+        .chat-message { max-width: 90%; }
+        .bp-header { font-size: 2rem; }
+        .metric-card { margin-bottom: 1rem; }
+        .stButton button { width: 100%; }
+    }
+
+    .dark-mode .stApp { background-color: #0f172a; }
+    .dark-mode .bp-card { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+    .dark-mode [data-testid="stSidebar"] { background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -307,7 +411,6 @@ with st.sidebar:
                             if data.get("success"):
                                 token = data["data"]["access_token"]
                                 st.session_state.token = token
-                                # حفظ التوكن في query params
                                 st.query_params["token"] = token
                                 user_r = requests.get(f"{BACKEND}/users/me", headers=get_headers())
                                 if user_r.ok:
@@ -350,15 +453,18 @@ with st.sidebar:
                         except Exception as e:
                             st.error(str(e))
     else:
+        # استخدام الدالة الآمنة للحصول على معلومات المستخدم
+        full_name, role = safe_get_user_info()
+        
         st.markdown(f"""
         <div style="background: rgba(255, 255, 255, 0.15); padding: 1rem; border-radius: 12px; margin-bottom: 1rem;">
-            <p style="color: white; font-weight: bold; margin:0;">👤 {st.session_state.user.get('full_name', 'User')}</p>
-            <small style="color: rgba(255, 255, 255, 0.8);">{st.session_state.user.get('role', 'user')}</small>
+            <p style="color: white; font-weight: bold; margin:0;">👤 {full_name}</p>
+            <small style="color: rgba(255, 255, 255, 0.8);">{role}</small>
         </div>
         """, unsafe_allow_html=True)
+        
         if st.button(tr("🚪 تسجيل خروج", "🚪 Logout"), use_container_width=True):
-            # مسح التوكن من session_state و query params
-            for key in ["token", "user", "selected_project"]:
+            for key in ["token", "user", "selected_project", "tasks_data"]:
                 st.session_state[key] = None
             st.query_params.clear()
             st.rerun()
@@ -402,7 +508,7 @@ with st.sidebar:
                         
                         if st.session_state.selected_project != proj_options[selected_label]:
                             st.session_state.selected_project = proj_options[selected_label]
-                            # إعادة جلب المهام للمشروع الجديد
+                            st.session_state.last_project_id = None  # Force refresh tasks
                             st.rerun()
                     else:
                         st.info(tr("✨ لا توجد مشاريع", "✨ No projects"))
@@ -538,6 +644,7 @@ def fetch_project_data(pid, headers):
 project_id = st.session_state.selected_project
 data = fetch_project_data(project_id, get_headers())
 if data is None:
+    # بيانات تجريبية
     data = {
         "project_info": {"name": "مشروع تجريبي", "location": "القاهرة"},
         "timeline": [],
@@ -549,7 +656,7 @@ if data is None:
 
 health_score = data.get('health_score', 50)
 
-# ========== الكارت الموحد ==========
+# ========== الكارت العلوي ==========
 with st.container():
     col_left, col_right = st.columns([3, 1])
     with col_left:
@@ -1300,6 +1407,10 @@ elif st.session_state.current_section == tab_names[7]:
 # ========== اختبار النماذج ==========
 elif st.session_state.current_section == tab_names[8]:
     st.subheader(tr("🧪 اختبار النماذج الذكية", "🧪 AI Models Testing"))
+    
+    if llm is None:
+        st.warning(tr("⚠️ لم يتم العثور على ملف llm_provider.py، لن تعمل هذه الميزة", "⚠️ llm_provider.py not found, this feature won't work"))
+        st.stop()
     
     st.markdown("""
     هذه الأداة تساعدك في معرفة أي من النماذج المضافة في ملف `llm_provider.py` يعمل بشكل صحيح مع مفاتيح API الحالية.
