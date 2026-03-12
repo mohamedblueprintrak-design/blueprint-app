@@ -42,6 +42,10 @@ st.markdown(pwa_html, unsafe_allow_html=True)
 # قراءة رابط الـ Backend من متغيرات البيئة
 BACKEND = os.getenv("BACKEND_URL", "https://mohamedhuggig-blueprint-api.hf.space")
 
+# تعريف دالة الترجمة في الأعلى قبل استخدامها
+def tr(text_ar, text_en):
+    return text_ar if st.session_state.language == "ar" else text_en
+
 # تهيئة Session State
 if "msgs" not in st.session_state:
     st.session_state.msgs = []
@@ -69,9 +73,6 @@ if "current_section" not in st.session_state:
 def switch_lang():
     st.session_state.language = "en" if st.session_state.language == "ar" else "ar"
     st.rerun()
-
-def tr(text_ar, text_en):
-    return text_ar if st.session_state.language == "ar" else text_en
 
 def get_headers():
     if st.session_state.token:
