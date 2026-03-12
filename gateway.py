@@ -40,7 +40,7 @@ pwa_html = """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
 # قراءة رابط الـ Backend من متغيرات البيئة، مع الاحتفاظ بـ localhost كاحتياطي للتشغيل المحلي
-BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000")
+BACKEND = os.getenv("BACKEND_URL", "https://mohamedhuggig-blueprint-api.hf.space")
 
 # تهيئة Session State
 if "msgs" not in st.session_state:
