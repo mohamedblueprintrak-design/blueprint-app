@@ -1,6 +1,6 @@
 """
 BluePrint Engineering Consultancy - AI-Powered Engineering OS
-الواجهة النهائية - جميع الوظائف + مهام المهندس + العملة + دائرة الصحة + اختبار النماذج + مهام دائمة
+الواجهة النهائية - جميع الوظائف + مهام المهندس + العملة + دائرة الصحة + اختبار النماذج + عرض الصور
 """
 
 import streamlit as st
@@ -18,19 +18,6 @@ import asyncio
 import base64
 from PIL import Image
 import io
-
-def display_image_from_base64(base64_str):
-    """عرض صورة من نص base64"""
-    try:
-        if base64_str and isinstance(base64_str, str):
-            image_bytes = base64.b64decode(base64_str)
-            image = Image.open(io.BytesIO(image_bytes))
-            st.image(image, caption="رسم توضيحي للقطاع", use_container_width=True)
-            return True
-    except Exception as e:
-        st.error(f"خطأ في عرض الصورة: {e}")
-        return False
-    return False
 
 # استيراد مزود LLM لاستخدامه في اختبار النماذج
 from llm_provider import llm
@@ -135,6 +122,19 @@ def format_currency(amount):
     sym = symbols.get(st.session_state.currency, st.session_state.currency)
     amt = f"{amount:,.0f}"
     return f"{amt} {sym}" if st.session_state.language == "ar" else f"{sym} {amt}"
+
+def display_image_from_base64(base64_str):
+    """عرض صورة من نص base64"""
+    try:
+        if base64_str and isinstance(base64_str, str):
+            image_bytes = base64.b64decode(base64_str)
+            image = Image.open(io.BytesIO(image_bytes))
+            st.image(image, caption="رسم توضيحي للقطاع", use_container_width=True)
+            return True
+    except Exception as e:
+        st.error(f"خطأ في عرض الصورة: {e}")
+        return False
+    return False
 
 # ========== CSS محسن (نصوص بيضاء، حقول إدخال سوداء) ==========
 st.markdown("""
@@ -796,7 +796,14 @@ with tabs[1]:
                                 reply = first_value if isinstance(first_value, str) else str(first_value)
                             else:
                                 reply = tr("لم أفهم، حاول مرة أخرى.", "I didn't understand, please try again.")
+                            
+                            # عرض الرد النصي
                             st.markdown(reply)
+                            
+                            # عرض الصورة إذا كانت موجودة
+                            if "image_data" in results_dict:
+                                display_image_from_base64(results_dict["image_data"])
+                            
                             st.session_state.msgs.append({"role": "assistant", "content": reply})
                         else:
                             error_msg = result.get("error", {}).get("message", "❌ خطأ")
@@ -1286,7 +1293,6 @@ with tabs[7]:
             
             submitted = st.form_submit_button(tr("➕ إضافة مهمة", "➕ Add task"))
             if submitted and t_desc and t_ass:
-                # إرسال المهمة إلى الـ API
                 try:
                     r = requests.post(
                         f"{BACKEND}/tasks/{project_id}",
@@ -1303,7 +1309,6 @@ with tabs[7]:
                         data = r.json()
                         if data.get("success"):
                             st.success(tr("✅ تمت الإضافة", "✅ Added"))
-                            # إعادة جلب المهام
                             st.session_state.tasks_data = fetch_tasks()
                             st.rerun()
                         else:
@@ -1335,7 +1340,6 @@ with tabs[7]:
                     if task['status'] != "منتهية":
                         next_status = "جاري" if task['status'] == "قيد الانتظار" else "منتهية"
                         if st.button(f"⏩ {next_status}", key=f"status_{task['id']}"):
-                            # تحديث الحالة عبر API
                             try:
                                 r = requests.put(
                                     f"{BACKEND}/tasks/{task['id']}",
@@ -1343,7 +1347,6 @@ with tabs[7]:
                                     headers=get_headers()
                                 )
                                 if r.ok:
-                                    # إعادة جلب المهام
                                     st.session_state.tasks_data = fetch_tasks()
                                     st.rerun()
                             except:
@@ -1352,7 +1355,6 @@ with tabs[7]:
                         st.write("---")
                 with cols[4]:
                     if st.button("🗑️", key=f"del_{task['id']}"):
-                        # حذف المهمة عبر API
                         try:
                             r = requests.delete(f"{BACKEND}/tasks/{task['id']}", headers=get_headers())
                             if r.ok:
@@ -1362,7 +1364,6 @@ with tabs[7]:
                             pass
                 st.markdown("---")
             
-            # إحصائيات سريعة
             col_stat1, col_stat2, col_stat3 = st.columns(3)
             with col_stat1:
                 st.metric("إجمالي المهام", len(st.session_state.tasks_data))
@@ -1373,7 +1374,6 @@ with tabs[7]:
                 completed = sum(1 for t in st.session_state.tasks_data if t['status'] == "منتهية")
                 st.metric("منتهية", completed)
             
-            # زر لحذف جميع المهام المنتهية
             if st.button(tr("🗑️ حذف المنتهية", "🗑️ Clear completed")):
                 for task in st.session_state.tasks_data:
                     if task['status'] == "منتهية":
@@ -1395,7 +1395,6 @@ with tabs[8]:
     اضغط على زر **اختبار** بجانب كل نموذج لفحصه.
     """)
     
-    # قائمة النماذج الرئيسية التي نريد اختبارها
     models_to_test = [
         "gpt-4o-mini",
         "gemini-flash",
@@ -1414,11 +1413,9 @@ with tabs[8]:
         "huggingface-qwen-2.5-7b"
     ]
     
-    # تخزين نتائج الاختبار في session_state
     if "model_test_results" not in st.session_state:
         st.session_state.model_test_results = {}
     
-    # وظيفة لاختبار نموذج واحد
     async def test_single_model(model_name):
         prompt = "قل 'مرحباً' فقط"
         try:
@@ -1430,14 +1427,12 @@ with tabs[8]:
         except Exception as e:
             return "❌ خطأ", str(e)[:50]
     
-    # عرض النماذج في جدول
     for model_name in models_to_test:
         with st.container():
             cols = st.columns([2, 1, 2])
             with cols[0]:
                 st.write(f"**{model_name}**")
             with cols[1]:
-                # عرض النتيجة السابقة إن وجدت
                 if model_name in st.session_state.model_test_results:
                     result, msg = st.session_state.model_test_results[model_name]
                     if "✅" in result:
@@ -1449,7 +1444,6 @@ with tabs[8]:
             with cols[2]:
                 if st.button(tr("اختبار", "Test"), key=f"test_{model_name}"):
                     with st.spinner(f"جاري اختبار {model_name}..."):
-                        # تشغيل الاختبار غير المتزامن
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
                         result, msg = loop.run_until_complete(test_single_model(model_name))
@@ -1461,7 +1455,6 @@ with tabs[8]:
                     st.caption(st.session_state.model_test_results[model_name][1])
             st.markdown("---")
     
-    # زر لمسح جميع النتائج
     if st.button(tr("🔄 إعادة تعيين الاختبارات", "🔄 Reset Tests")):
         st.session_state.model_test_results = {}
         st.rerun()
